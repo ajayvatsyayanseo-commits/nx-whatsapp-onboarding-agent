@@ -2,6 +2,8 @@
 
 Laravel package/module for deterministic WhatsApp student and tutor signup.
 
+License: proprietary. See [LICENSE](LICENSE).
+
 ## What It Does
 
 - Accepts WhatsApp signup intents such as `signup`, `I want to register`, `student signup`, and `tutor signup`.

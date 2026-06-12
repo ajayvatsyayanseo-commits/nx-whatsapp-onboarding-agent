@@ -1,0 +1,36 @@
+Proprietary License
+
+Copyright (c) 2026 NXtutors.
+All rights reserved.
+
+This software, including source code, configuration, infrastructure templates,
+documentation, tests, scripts, and related materials, is proprietary and
+confidential to NXtutors and its authorized representatives.
+
+Permission is granted only to NXtutors employees, contractors, vendors, and
+authorized development partners who have been expressly approved by NXtutors to
+use this software for the purpose of developing, deploying, operating, testing,
+or maintaining the NXtutors WhatsApp Onboarding Agent and related NXtutors
+systems.
+
+Except as expressly authorized in writing by NXtutors, you may not:
+
+- copy, publish, sublicense, sell, rent, lease, distribute, or transfer this
+  software;
+- use this software for any third-party product, service, or customer;
+- disclose this software or any implementation details to unauthorized parties;
+- remove or alter this license notice;
+- reverse engineer production secrets, credentials, or deployment
+  configurations associated with this software.
+
+This software is provided "as is" for authorized NXtutors use only. NXtutors
+does not grant any patent, trademark, copyright, or other intellectual property
+license except the limited internal-use permission described above.
+
+Production secrets, credentials, access tokens, database passwords, private
+keys, and customer data must never be committed to source control. They must be
+stored in approved secret-management systems such as AWS Secrets Manager or
+GitHub Actions secrets where appropriate.
+
+Any unauthorized use, copying, distribution, or disclosure of this software is
+strictly prohibited and may result in legal action.
