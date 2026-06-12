@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="vendor/autoload.php" colors="true">
+  <testsuites>
+    <testsuite name="Unit">
+      <directory>tests/Unit</directory>
+    </testsuite>
+    <testsuite name="Feature">
+      <directory>tests/Feature</directory>
+    </testsuite>
+  </testsuites>
+  <php>
+    <env name="APP_ENV" value="testing"/>
+    <env name="STUDENT_DASHBOARD_URL" value="https://local.nxtutors.test/student/dashboard"/>
+    <env name="TUTOR_DASHBOARD_URL" value="https://local.nxtutors.test/tutor/dashboard"/>
+    <env name="WHATSAPP_CREATE_REAL_PROFILE" value="false"/>
+    <env name="TERMS_STUDENT_URL" value="https://www.nxtutors.com/terms-conditions"/>
+    <env name="PRIVACY_STUDENT_URL" value="https://www.nxtutors.com/privacy-policy"/>
+    <env name="TERMS_TUTOR_URL" value="https://www.nxtutors.com/terms-conditions"/>
+    <env name="PRIVACY_TUTOR_URL" value="https://www.nxtutors.com/privacy-policy"/>
+  </php>
+</phpunit>

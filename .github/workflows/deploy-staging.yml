@@ -1,0 +1,100 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_terraform:
+        description: Run terraform apply for staging.
+        required: false
+        type: boolean
+        default: false
+      run_migrations:
+        description: Run Laravel migrations.
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy staging
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 50
+    env:
+      ENVIRONMENT: staging
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_STAGING_DEPLOY_ROLE_ARN }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_WEB_SERVICE: ${{ vars.ECS_WEB_SERVICE }}
+      ECS_WORKER_SERVICE: ${{ vars.ECS_WORKER_SERVICE }}
+      ECS_WEB_TASK_FAMILY: ${{ vars.ECS_WEB_TASK_FAMILY }}
+      ECS_WORKER_TASK_FAMILY: ${{ vars.ECS_WORKER_TASK_FAMILY }}
+      APP_URL: ${{ vars.APP_URL }}
+      WEBHOOK_VERIFY_URL: ${{ vars.WEBHOOK_VERIFY_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: nx-whatsapp-onboarding-agent/docker/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:main
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:staging
+
+      - name: Terraform apply staging
+        if: github.event_name == 'push' || inputs.run_terraform == true
+        working-directory: nx-whatsapp-onboarding-agent/infra/terraform/envs/staging
+        run: |
+          terraform init
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan
+
+      - name: Deploy ECS services
+        env:
+          IMAGE_URI: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        run: |
+          bash ./nx-whatsapp-onboarding-agent/scripts/deploy_migrate.sh register-task-definitions "$IMAGE_URI"
+          bash ./nx-whatsapp-onboarding-agent/scripts/deploy_migrate.sh update-service web "$IMAGE_URI"
+          bash ./nx-whatsapp-onboarding-agent/scripts/deploy_migrate.sh update-service worker "$IMAGE_URI"
+
+      - name: Run migrations
+        if: github.event_name == 'push' || inputs.run_migrations == true
+        run: bash ./nx-whatsapp-onboarding-agent/scripts/deploy_migrate.sh migrate
+
+      - name: Wait for stability
+        run: bash ./nx-whatsapp-onboarding-agent/scripts/ecs_wait_for_stability.sh
+
+      - name: Smoke test
+        run: bash ./nx-whatsapp-onboarding-agent/scripts/smoke_test.sh --strong
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Staging deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Environment: staging" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,34 @@
+module "onboarding" {
+  source = "../.."
+
+  app_name               = var.app_name
+  aws_region             = var.aws_region
+  environment            = "staging"
+  create_vpc             = var.create_vpc
+  vpc_id                 = var.vpc_id
+  public_subnet_ids      = var.public_subnet_ids
+  private_subnet_ids     = var.private_subnet_ids
+  domain_name            = var.domain_name
+  certificate_arn        = var.certificate_arn
+  ecr_repo_name          = var.ecr_repo_name
+  ecs_cluster_name       = var.ecs_cluster_name
+  web_cpu                = var.web_cpu
+  web_memory             = var.web_memory
+  worker_cpu             = var.worker_cpu
+  worker_memory          = var.worker_memory
+  desired_count_web      = var.desired_count_web
+  desired_count_worker   = var.desired_count_worker
+  aurora_engine_version  = var.aurora_engine_version
+  aurora_min_acu         = var.aurora_min_acu
+  aurora_max_acu         = var.aurora_max_acu
+  redis_node_type        = var.redis_node_type
+  sqs_visibility_timeout = var.sqs_visibility_timeout
+  secrets_arns           = var.secrets_arns
+  media_bucket_name      = var.media_bucket_name
+  analytics_bucket_name  = var.analytics_bucket_name
+  log_retention_days     = var.log_retention_days
+  container_image        = var.container_image
+  environment_variables  = var.environment_variables
+  github_org             = var.github_org
+  github_repo            = var.github_repo
+}

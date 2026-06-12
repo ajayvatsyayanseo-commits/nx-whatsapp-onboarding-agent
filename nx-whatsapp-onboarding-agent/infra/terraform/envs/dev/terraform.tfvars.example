@@ -1,0 +1,37 @@
+app_name               = "nxtutors-whatsapp-onboarding"
+aws_region             = "ap-south-1"
+create_vpc             = false
+vpc_id                 = "vpc-xxxxxxxx"
+public_subnet_ids      = ["subnet-public-a", "subnet-public-b"]
+private_subnet_ids     = ["subnet-private-a", "subnet-private-b"]
+domain_name            = "dev-whatsapp.nxtutors.com"
+certificate_arn        = "arn:aws:acm:ap-south-1:123456789012:certificate/xxxxxxxx"
+ecr_repo_name          = "nxtutors-whatsapp-onboarding"
+ecs_cluster_name       = "nxtutors-dev"
+web_cpu                = 512
+web_memory             = 1024
+worker_cpu             = 512
+worker_memory          = 1024
+desired_count_web      = 1
+desired_count_worker   = 1
+aurora_engine_version  = "16.4"
+aurora_min_acu         = 0.5
+aurora_max_acu         = 2
+redis_node_type        = "cache.t4g.micro"
+sqs_visibility_timeout = 120
+media_bucket_name      = "nxtutors-dev-whatsapp-media"
+analytics_bucket_name  = "nxtutors-dev-whatsapp-analytics"
+log_retention_days     = 14
+container_image        = "public.ecr.aws/docker/library/php:8.2-fpm"
+github_org             = "your-github-org"
+github_repo            = "your-repo"
+
+secrets_arns = {}
+
+environment_variables = {
+  APP_ENV                         = "production"
+  WHATSAPP_CREATE_REAL_PROFILE    = "false"
+  WHATSAPP_SIGNUP_ENABLED         = "true"
+  WHATSAPP_STUDENT_SIGNUP_ENABLED = "true"
+  WHATSAPP_TUTOR_SIGNUP_ENABLED   = "true"
+}

@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+      - "release/**"
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: PHP test and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: nx-whatsapp-onboarding-agent
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP and Composer
+        uses: ./.github/actions/setup-php-composer
+        with:
+          working-directory: nx-whatsapp-onboarding-agent
+
+      - name: Generate test env only
+        run: |
+          cp .env.local.example .env.testing
+          sed -i 's/^APP_ENV=.*/APP_ENV=testing/' .env.testing
+          sed -i 's/^WHATSAPP_CREATE_REAL_PROFILE=.*/WHATSAPP_CREATE_REAL_PROFILE=false/' .env.testing
+
+      - name: Composer validate
+        run: composer validate --strict
+
+      - name: PHP lint
+        run: find src config routes database tests -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Static analysis
+        run: |
+          if [ -x vendor/bin/phpstan ]; then
+            vendor/bin/phpstan analyse --no-progress
+          elif [ -x vendor/bin/psalm ]; then
+            vendor/bin/psalm --no-progress
+          else
+            echo "PHPStan/Psalm not installed; skipping static analysis."
+          fi
+
+      - name: Code style
+        run: |
+          if [ -x vendor/bin/pint ]; then
+            vendor/bin/pint --test
+          elif [ -x vendor/bin/phpcs ]; then
+            vendor/bin/phpcs
+          else
+            echo "Laravel Pint/PHPCS not installed; skipping style check."
+          fi
+
+      - name: PHPUnit tests
+        run: |
+          mkdir -p build/logs
+          if composer run-script --list | grep -q '^  test'; then
+            composer test -- --log-junit build/logs/junit.xml --coverage-clover build/logs/clover.xml || composer test
+          else
+            vendor/bin/phpunit --log-junit build/logs/junit.xml --coverage-clover build/logs/clover.xml
+          fi
+
+      - name: Migration dry run
+        run: |
+          if [ -f ../artisan ]; then
+            php ../artisan migrate --pretend --path=nx-whatsapp-onboarding-agent/database/migrations --force
+          elif [ -f artisan ]; then
+            php artisan migrate --pretend --path=database/migrations --force
+          else
+            echo "No Laravel artisan found in this package checkout; migration dry-run skipped."
+          fi
+
+      - name: Composer audit
+        run: composer audit --locked
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker build test
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: nx-whatsapp-onboarding-agent/docker/Dockerfile
+          push: false
+          tags: nxtutors-whatsapp-onboarding:test
+
+      - name: Enforce coverage threshold when report exists
+        run: |
+          if [ -f build/logs/clover.xml ] && [ -n "${COVERAGE_MIN_PERCENT:-}" ]; then
+            php -r '$xml=simplexml_load_file("build/logs/clover.xml"); $m=$xml->project->metrics; $pct=((int)$m["statements"]>0)?((int)$m["coveredstatements"]/(int)$m["statements"]*100):0; if ($pct < (float)getenv("COVERAGE_MIN_PERCENT")) { fwrite(STDERR, "Coverage {$pct}% below threshold\n"); exit(1); } echo "Coverage {$pct}%\n";'
+          else
+            echo "Coverage threshold not configured or report missing."
+          fi
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-test-reports
+          path: nx-whatsapp-onboarding-agent/build/logs
+          if-no-files-found: ignore
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## CI summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- PHP lint, tests, dependency audit, secret scan, and Docker build were executed." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Production secrets were not generated or printed." >> "$GITHUB_STEP_SUMMARY"

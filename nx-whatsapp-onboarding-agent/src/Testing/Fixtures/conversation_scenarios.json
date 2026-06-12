@@ -1,0 +1,64 @@
+{
+  "student_complete": {
+    "description": "New user sends signup and completes student flow.",
+    "messages": ["signup", "1", "Asha Student", "asha@example.test", "2005-05-10", "female", "online", "Class 10 Maths", "5000 monthly", "SKIP", "Bengaluru", "SKIP", "Karnataka", "560001", "Need maths help", "CONFIRM", "I AGREE", "123456"],
+    "expected_terminal_state": "COMPLETED"
+  },
+  "tutor_complete": {
+    "description": "New user sends signup and completes tutor flow.",
+    "messages": ["tutor signup", "Ravi Tutor", "ravi@example.test", "1994-02-01", "male", "MSc Mathematics", "NET qualified", "5 years", "SKIP", "online", "Class 9 to 12 Maths", "800 hourly", "SKIP", "Mumbai", "SKIP", "Maharashtra", "400001", "PAN", "ABCDE1234F", "media-front", "SKIP", "Maths Tutor", "I help students build concepts.", "Experienced board exam tutor.", "CONFIRM", "I AGREE", "123456"],
+    "expected_terminal_state": "COMPLETED"
+  },
+  "invalid_email_twice": {
+    "description": "User sends invalid email twice then valid email.",
+    "messages": ["signup", "student", "Asha", "bad", "still-bad", "asha@example.test"],
+    "expected_state": "STUDENT_DOB"
+  },
+  "duplicate_phone": {
+    "description": "User phone already exists in register.",
+    "preexisting_register": {"phone": "+919999000001"},
+    "messages": ["signup"],
+    "expected_terminal_state": "HUMAN_HANDOFF"
+  },
+  "edit_during_review": {
+    "description": "User edits a field during review.",
+    "messages": ["review", "EDIT name", "Asha Updated", "CONFIRM"],
+    "expected_state": "WAITING_TERMS_ACCEPTANCE"
+  },
+  "cancel": {
+    "description": "User cancels onboarding.",
+    "messages": ["signup", "student", "cancel"],
+    "expected_terminal_state": "CANCELLED"
+  },
+  "restart": {
+    "description": "User restarts after confirmation.",
+    "messages": ["signup", "student", "restart", "CONFIRM"],
+    "expected_state": "WAITING_ROLE_SELECTION"
+  },
+  "rapid_messages": {
+    "description": "Multiple messages quickly should lock and process one state transition per event.",
+    "messages": ["Asha One", "Asha Two"],
+    "expected_lock_version_increment_per_event": 1
+  },
+  "otp_expired": {
+    "description": "Expired OTP results in a fresh OTP.",
+    "messages": ["000000"],
+    "context": {"otp_issued_at": "2000-01-01T00:00:00+00:00"},
+    "expected_state": "WAITING_OTP"
+  },
+  "tutor_uploads_documents": {
+    "description": "Tutor uploads front and back documents.",
+    "messages": ["media-front", "media-back"],
+    "expected_fields": ["front_image", "back_image"]
+  },
+  "terms_reject_maybe_ok": {
+    "description": "Terms not accepted for maybe or ok before exact agreement.",
+    "messages": ["maybe", "ok", "I AGREE"],
+    "expected_state_after_invalid": "WAITING_TERMS_ACCEPTANCE"
+  },
+  "hitl_after_repeated_invalid": {
+    "description": "HITL after repeated invalid input.",
+    "messages": ["bad-email", "bad-email", "bad-email"],
+    "expected_terminal_state": "HUMAN_HANDOFF"
+  }
+}

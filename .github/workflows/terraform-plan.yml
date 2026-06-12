@@ -1,0 +1,70 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    paths:
+      - "nx-whatsapp-onboarding-agent/infra/terraform/**"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to plan.
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: terraform-plan-${{ github.event.inputs.environment || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    env:
+      ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_TERRAFORM_PLAN_ROLE_ARN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt
+        working-directory: nx-whatsapp-onboarding-agent/infra/terraform
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init and validate
+        working-directory: nx-whatsapp-onboarding-agent/infra/terraform/envs/${{ env.ENVIRONMENT }}
+        run: |
+          terraform init
+          terraform validate
+
+      - name: Terraform plan
+        working-directory: nx-whatsapp-onboarding-agent/infra/terraform/envs/${{ env.ENVIRONMENT }}
+        run: terraform plan -no-color -out=tfplan | tee terraform-plan.txt
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ env.ENVIRONMENT }}
+          path: nx-whatsapp-onboarding-agent/infra/terraform/envs/${{ env.ENVIRONMENT }}/terraform-plan.txt
+
+      - name: Summary
+        run: |
+          echo "## Terraform plan" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Environment: $ENVIRONMENT" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Plan artifact uploaded." >> "$GITHUB_STEP_SUMMARY"

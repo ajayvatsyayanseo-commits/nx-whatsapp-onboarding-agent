@@ -1,0 +1,87 @@
+name: Rollback ECS
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to rollback.
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      service:
+        description: ECS service to rollback.
+        required: true
+        type: choice
+        options:
+          - web
+          - worker
+          - both
+      image_tag:
+        description: Optional ECR image tag to deploy.
+        required: false
+        type: string
+      task_definition_revision:
+        description: Optional task definition revision to restore.
+        required: false
+        type: string
+      reason:
+        description: Rollback reason.
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: rollback-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 35
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ inputs.environment == 'prod' && vars.AWS_PROD_DEPLOY_ROLE_ARN || inputs.environment == 'staging' && vars.AWS_STAGING_DEPLOY_ROLE_ARN || vars.AWS_DEV_DEPLOY_ROLE_ARN }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_WEB_SERVICE: ${{ vars.ECS_WEB_SERVICE }}
+      ECS_WORKER_SERVICE: ${{ vars.ECS_WORKER_SERVICE }}
+      ECS_WEB_TASK_FAMILY: ${{ vars.ECS_WEB_TASK_FAMILY }}
+      ECS_WORKER_TASK_FAMILY: ${{ vars.ECS_WORKER_TASK_FAMILY }}
+      APP_URL: ${{ vars.APP_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: Rollback ECS
+        run: |
+          bash ./nx-whatsapp-onboarding-agent/scripts/rollback_ecs.sh \
+            "${{ inputs.environment }}" \
+            "${{ inputs.service }}" \
+            "${{ inputs.image_tag || inputs.task_definition_revision }}" \
+            "${{ inputs.reason }}"
+
+      - name: Smoke test
+        run: bash ./nx-whatsapp-onboarding-agent/scripts/smoke_test.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Rollback summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Environment: ${{ inputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Service: ${{ inputs.service }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Reason: ${{ inputs.reason }}" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,177 @@
+# =============================================================================
+# NXtutors WhatsApp Onboarding Agent - Files Not To Commit
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# Real environment files and local secrets
+# Keep examples such as .env.local.example committed.
+# -----------------------------------------------------------------------------
+
+.env.*
+
+
+*.env
+*.env.local.example
+*.local
+*.secret
+*.secrets
+*.key
+*.pem
+*.p8
+*.p12
+*.crt
+*.cer
+*.jks
+
+
+# -----------------------------------------------------------------------------
+# Git secret/checklist files with real values
+# Commit .gitsecrate only if it stays as a blank checklist/template.
+# If you copy it and fill real values, never commit that copy.
+# -----------------------------------------------------------------------------
+.gitsecret/
+.gitsecrets
+.gitsecrets/*
+.gitsecrate.local
+.gitsecrate.production
+.gitsecrate.staging
+.gitsecrate.filled
+secrets.json
+secrets.local.json
+aws-secrets.json
+
+
+# -----------------------------------------------------------------------------
+# Composer / PHP dependencies and caches
+# -----------------------------------------------------------------------------
+vendor/
+composer.phar
+.phpunit.cache/
+.phpunit.result.cache
+coverage/
+build/
+
+
+# -----------------------------------------------------------------------------
+# Laravel runtime files
+# -----------------------------------------------------------------------------
+bootstrap/cache/*.php
+storage/*.key
+storage/app/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/testing/*
+storage/framework/views/*
+storage/logs/*
+storage/reports/*
+
+!storage/app/.gitignore
+!storage/framework/cache/.gitignore
+!storage/framework/sessions/.gitignore
+!storage/framework/testing/.gitignore
+!storage/framework/views/.gitignore
+!storage/logs/.gitignore
+
+
+# -----------------------------------------------------------------------------
+# WhatsApp onboarding local media, exports, and payload dumps
+# -----------------------------------------------------------------------------
+nxtutors/onboarding/
+onboarding_exports/
+onboarding_events/
+raw_webhook_payloads/
+media_downloads/
+*.payload.json
+*.webhook.json
+*.ndjson
+*.parquet
+
+
+# -----------------------------------------------------------------------------
+# Node / frontend / load-test dependencies and output
+# -----------------------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.yarn/
+.pnpm-store/
+dist/
+.vite/
+
+
+# -----------------------------------------------------------------------------
+# Docker and local runtime artifacts
+# -----------------------------------------------------------------------------
+.docker/
+docker/.env
+docker/.env.*
+docker-compose.override.yml
+*.pid
+*.sock
+
+
+# -----------------------------------------------------------------------------
+# IDE and OS files
+# -----------------------------------------------------------------------------
+.idea/
+.vscode/
+*.code-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
+
+
+# -----------------------------------------------------------------------------
+# Logs and temporary files
+# -----------------------------------------------------------------------------
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*.orig
+*.retry
+
+
+# -----------------------------------------------------------------------------
+# Terraform local state and plans
+# -----------------------------------------------------------------------------
+infra/terraform/**/.terraform/
+infra/terraform/**/terraform.tfvars
+infra/terraform/**/terraform.tfvars.json
+!infra/terraform/**/terraform.tfvars.example
+infra/terraform/**/*.tfstate
+infra/terraform/**/*.tfstate.*
+infra/terraform/**/*.tfplan
+infra/terraform/**/crash.log
+infra/terraform/**/override.tf
+infra/terraform/**/override.tf.json
+infra/terraform/**/*_override.tf
+infra/terraform/**/*_override.tf.json
+
+
+# -----------------------------------------------------------------------------
+# AWS / cloud credentials accidentally copied into the package
+# -----------------------------------------------------------------------------
+.aws/
+credentials
+credentials.json
+service-account.json
+service_account.json
+
+
+# -----------------------------------------------------------------------------
+# Database dumps and backups
+# -----------------------------------------------------------------------------
+*.sql
+*.sql.gz
+*.dump
+*.backup
+*.bak.sql
+database/backups/
+database/dumps/
