@@ -43,6 +43,7 @@ jobs:
       ECS_WORKER_TASK_FAMILY: ${{ vars.ECS_WORKER_TASK_FAMILY }}
       APP_URL: ${{ vars.APP_URL }}
       WEBHOOK_VERIFY_URL: ${{ vars.WEBHOOK_VERIFY_URL }}
+      TF_INPUT: false
     steps:
       - uses: actions/checkout@v4
 
@@ -68,12 +69,12 @@ jobs:
             ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:staging
 
       - name: Terraform apply staging
-        if: github.event_name == 'push' || inputs.run_terraform == true
+        if: github.event_name == 'workflow_dispatch' && inputs.run_terraform == true
         working-directory: nx-whatsapp-onboarding-agent/infra/terraform/envs/staging
         run: |
-          terraform init
-          terraform plan -out=tfplan
-          terraform apply -auto-approve tfplan
+          terraform init -input=false
+          terraform plan -input=false -out=tfplan
+          terraform apply -input=false -auto-approve tfplan
 
       - name: Deploy ECS services
         env:

@@ -33,6 +33,7 @@ jobs:
       ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
       AWS_REGION: ${{ vars.AWS_REGION }}
       AWS_ROLE_ARN: ${{ vars.AWS_TERRAFORM_PLAN_ROLE_ARN }}
+      TF_INPUT: false
     steps:
       - uses: actions/checkout@v4
 
@@ -50,12 +51,12 @@ jobs:
       - name: Terraform init and validate
         working-directory: nx-whatsapp-onboarding-agent/infra/terraform/envs/${{ env.ENVIRONMENT }}
         run: |
-          terraform init
+          terraform init -input=false
           terraform validate
 
       - name: Terraform plan
         working-directory: nx-whatsapp-onboarding-agent/infra/terraform/envs/${{ env.ENVIRONMENT }}
-        run: terraform plan -no-color -out=tfplan | tee terraform-plan.txt
+        run: terraform plan -input=false -no-color -out=tfplan | tee terraform-plan.txt
 
       - name: Upload plan artifact
         uses: actions/upload-artifact@v4

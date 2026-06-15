@@ -53,6 +53,7 @@ jobs:
       APP_URL: ${{ vars.APP_URL }}
       WEBHOOK_VERIFY_URL: ${{ vars.WEBHOOK_VERIFY_URL }}
       SYNTHETIC_WEBHOOK_URL: ${{ vars.SYNTHETIC_WEBHOOK_URL }}
+      TF_INPUT: false
     steps:
       - uses: actions/checkout@v4
 
@@ -85,15 +86,16 @@ jobs:
             "${{ steps.image.outputs.uri }}"
 
       - name: Terraform plan
+        if: inputs.run_terraform == true
         working-directory: nx-whatsapp-onboarding-agent/infra/terraform/envs/prod
         run: |
-          terraform init
-          terraform plan -out=tfplan
+          terraform init -input=false
+          terraform plan -input=false -out=tfplan
 
       - name: Terraform apply
         if: inputs.run_terraform == true
         working-directory: nx-whatsapp-onboarding-agent/infra/terraform/envs/prod
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -input=false -auto-approve tfplan
 
       - name: Classify migrations
         id: migrations
