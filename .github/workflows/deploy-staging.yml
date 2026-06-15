@@ -41,6 +41,8 @@ jobs:
       ECS_WORKER_SERVICE: ${{ vars.ECS_WORKER_SERVICE }}
       ECS_WEB_TASK_FAMILY: ${{ vars.ECS_WEB_TASK_FAMILY }}
       ECS_WORKER_TASK_FAMILY: ${{ vars.ECS_WORKER_TASK_FAMILY }}
+      ECS_SUBNET_IDS: ${{ vars.ECS_SUBNET_IDS }}
+      ECS_SECURITY_GROUP_IDS: ${{ vars.ECS_SECURITY_GROUP_IDS }}
       APP_URL: ${{ vars.APP_URL }}
       WEBHOOK_VERIFY_URL: ${{ vars.WEBHOOK_VERIFY_URL }}
       TF_INPUT: false
@@ -85,7 +87,7 @@ jobs:
           bash ./nx-whatsapp-onboarding-agent/scripts/deploy_migrate.sh update-service worker "$IMAGE_URI"
 
       - name: Run migrations
-        if: github.event_name == 'push' || inputs.run_migrations == true
+        if: github.event_name == 'workflow_dispatch' && inputs.run_migrations == true
         run: bash ./nx-whatsapp-onboarding-agent/scripts/deploy_migrate.sh migrate
 
       - name: Wait for stability

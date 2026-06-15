@@ -82,7 +82,7 @@ run_one_off_task() {
   required_env ECS_SECURITY_GROUP_IDS
 
   local network
-  network="awsvpcConfiguration={subnets=[$ECS_SUBNET_IDS],securityGroups=[$ECS_SECURITY_GROUP_IDS],assignPublicIp=DISABLED}"
+  network="awsvpcConfiguration={subnets=[$ECS_SUBNET_IDS],securityGroups=[$ECS_SECURITY_GROUP_IDS],assignPublicIp=${ECS_ASSIGN_PUBLIC_IP:-ENABLED}}"
 
   aws ecs run-task \
     --cluster "$ECS_CLUSTER" \
