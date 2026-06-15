@@ -23,6 +23,7 @@
 *.crt
 *.cer
 *.jks
+*set_github_variables.ps1
 
 
 # -----------------------------------------------------------------------------
@@ -40,6 +41,7 @@
 secrets.json
 secrets.local.json
 aws-secrets.json
+set_github_variables.ps1
 
 
 # -----------------------------------------------------------------------------

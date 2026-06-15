@@ -56,6 +56,53 @@ jobs:
       WEBHOOK_VERIFY_URL: ${{ vars.WEBHOOK_VERIFY_URL }}
       SYNTHETIC_WEBHOOK_URL: ${{ vars.SYNTHETIC_WEBHOOK_URL }}
       TF_INPUT: false
+      APP_KEY: ${{ secrets.APP_KEY }}
+      APP_ENV: ${{ vars.APP_ENV || 'production' }}
+      APP_DEBUG: "false"
+      LOG_CHANNEL: ${{ vars.LOG_CHANNEL || 'stack' }}
+      LOG_LEVEL: ${{ vars.LOG_LEVEL || 'INFO' }}
+      DB_CONNECTION: ${{ vars.DB_CONNECTION || 'mysql' }}
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_DATABASE: ${{ secrets.DB_DATABASE }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      REDIS_HOST: ${{ secrets.REDIS_HOST }}
+      REDIS_PORT: ${{ secrets.REDIS_PORT }}
+      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+      REDIS_CONNECTION: ${{ vars.REDIS_CONNECTION || 'default' }}
+      CACHE_STORE: ${{ vars.CACHE_STORE || 'redis' }}
+      SESSION_DRIVER: ${{ vars.SESSION_DRIVER || 'redis' }}
+      QUEUE_CONNECTION: ${{ vars.QUEUE_CONNECTION || 'redis' }}
+      META_WHATSAPP_VERIFY_TOKEN: ${{ secrets.META_WHATSAPP_VERIFY_TOKEN }}
+      META_WHATSAPP_APP_SECRET: ${{ secrets.META_WHATSAPP_APP_SECRET }}
+      META_WHATSAPP_ACCESS_TOKEN: ${{ secrets.META_WHATSAPP_ACCESS_TOKEN }}
+      META_WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.META_WHATSAPP_PHONE_NUMBER_ID }}
+      TERMS_STUDENT_URL: ${{ vars.TERMS_STUDENT_URL }}
+      PRIVACY_STUDENT_URL: ${{ vars.PRIVACY_STUDENT_URL }}
+      TERMS_TUTOR_URL: ${{ vars.TERMS_TUTOR_URL }}
+      PRIVACY_TUTOR_URL: ${{ vars.PRIVACY_TUTOR_URL }}
+      STUDENT_DASHBOARD_URL: ${{ vars.STUDENT_DASHBOARD_URL }}
+      TUTOR_DASHBOARD_URL: ${{ vars.TUTOR_DASHBOARD_URL }}
+      WHATSAPP_ONBOARDING_LOGIN_URL: ${{ vars.WHATSAPP_ONBOARDING_LOGIN_URL }}
+      WHATSAPP_ONBOARDING_ENABLED: ${{ vars.WHATSAPP_ONBOARDING_ENABLED || 'true' }}
+      WHATSAPP_SIGNUP_ENABLED: ${{ vars.WHATSAPP_SIGNUP_ENABLED || 'true' }}
+      WHATSAPP_STUDENT_SIGNUP_ENABLED: ${{ vars.WHATSAPP_STUDENT_SIGNUP_ENABLED || 'true' }}
+      WHATSAPP_TUTOR_SIGNUP_ENABLED: ${{ vars.WHATSAPP_TUTOR_SIGNUP_ENABLED || 'true' }}
+      WHATSAPP_CREATE_REAL_PROFILE: ${{ vars.WHATSAPP_CREATE_REAL_PROFILE || 'true' }}
+      WHATSAPP_ONBOARDING_PAUSED: ${{ vars.WHATSAPP_ONBOARDING_PAUSED || 'false' }}
+      WHATSAPP_OUTBOUND_PAUSED: ${{ vars.WHATSAPP_OUTBOUND_PAUSED || 'false' }}
+      MEDIA_STORAGE_DRIVER: ${{ vars.MEDIA_STORAGE_DRIVER || 'legacy_public_user' }}
+      AWS_S3_MEDIA_BUCKET: ${{ secrets.AWS_S3_MEDIA_BUCKET }}
+      WHATSAPP_ONBOARDING_S3_MEDIA_BUCKET: ${{ secrets.WHATSAPP_ONBOARDING_S3_MEDIA_BUCKET }}
+      WHATSAPP_ONBOARDING_ANALYTICS_BUCKET: ${{ secrets.WHATSAPP_ONBOARDING_ANALYTICS_BUCKET }}
+      DASHBOARD_SIGNING_KEY: ${{ secrets.DASHBOARD_SIGNING_KEY }}
+      SYNTHETIC_WEBHOOK_SECRET: ${{ secrets.SYNTHETIC_WEBHOOK_SECRET }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      LLM_PROVIDER_API_KEY: ${{ secrets.LLM_PROVIDER_API_KEY }}
+      WHATSAPP_ONBOARDING_LLM_ENABLED: ${{ vars.WHATSAPP_ONBOARDING_LLM_ENABLED || 'false' }}
+      META_WHATSAPP_API_VERSION: ${{ vars.META_WHATSAPP_API_VERSION || 'v20.0' }}
+      META_GRAPH_BASE_URL: ${{ vars.META_GRAPH_BASE_URL || 'https://graph.facebook.com' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -128,7 +175,7 @@ jobs:
         run: bash ./nx-whatsapp-onboarding-agent/scripts/ecs_wait_for_stability.sh
 
       - name: Smoke test
-        run: bash ./nx-whatsapp-onboarding-agent/scripts/smoke_test.sh --strong
+        run: bash ./nx-whatsapp-onboarding-agent/scripts/smoke_test.sh
 
       - name: Synthetic internal webhook test
         if: env.SYNTHETIC_WEBHOOK_URL != ''

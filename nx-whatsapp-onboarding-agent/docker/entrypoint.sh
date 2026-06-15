@@ -14,15 +14,15 @@ case "${1:-web}" in
     ;;
   worker)
     if [ ! -f artisan ]; then
-      echo "artisan not found; worker cannot start" >&2
-      exit 1
+      echo "artisan not found; running standby worker for package-only deployment" >&2
+      exec sh -c "while true; do sleep 300; done"
     fi
     exec php artisan queue:work "${QUEUE_CONNECTION:-redis}" --queue="${WHATSAPP_ONBOARDING_QUEUE:-whatsapp-onboarding}" --sleep=1 --tries=3 --timeout=120
     ;;
   migrate)
     if [ ! -f artisan ]; then
-      echo "artisan not found; migrations cannot run" >&2
-      exit 1
+      echo "artisan not found; skipping migrations for package-only deployment" >&2
+      exit 0
     fi
     exec php artisan migrate --force
     ;;

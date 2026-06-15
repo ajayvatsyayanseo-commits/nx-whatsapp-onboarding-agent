@@ -16,7 +16,7 @@ RUN apt-get update \
         libpq-dev \
         libzip-dev \
         zip \
-    && docker-php-ext-install intl opcache pcntl pdo pdo_pgsql zip \
+    && docker-php-ext-install intl opcache pcntl pdo pdo_mysql pdo_pgsql zip \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
