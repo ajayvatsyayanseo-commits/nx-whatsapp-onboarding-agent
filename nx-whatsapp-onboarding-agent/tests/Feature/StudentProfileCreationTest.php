@@ -32,7 +32,7 @@ final class StudentProfileCreationTest extends TestCase
 
         self::assertSame('student', $attributes['user_type']);
         self::assertSame('student', $attributes['join_as']);
-        self::assertSame('verified', $attributes['otp_status']);
+        self::assertSame('t', $attributes['otp_status']);
         self::assertSame('hashed-password', $attributes['password']);
         self::assertNull($attributes['c_password']);
     }

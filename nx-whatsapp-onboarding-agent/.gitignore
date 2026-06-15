@@ -175,3 +175,6 @@ service_account.json
 *.bak.sql
 database/backups/
 database/dumps/
+
+# Glue/Athena schemas are source files, not database dumps.
+!infra/glue/*.sql
