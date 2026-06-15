@@ -27,7 +27,7 @@ wait_for_service() {
     stable="$(aws ecs describe-services \
       --cluster "$ECS_CLUSTER" \
       --services "$service" \
-      --query 'services[0].deployments | length(@) == `1` && services[0].runningCount == services[0].desiredCount && services[0].pendingCount == `0`' \
+      --query 'services[0].runningCount == services[0].desiredCount && services[0].pendingCount == `0` && length(services[0].deployments[?status == `PRIMARY` && rolloutState == `COMPLETED` && runningCount == desiredCount && pendingCount == `0`]) == `1`' \
       --output text)"
 
     if [ "$stable" = "True" ]; then
