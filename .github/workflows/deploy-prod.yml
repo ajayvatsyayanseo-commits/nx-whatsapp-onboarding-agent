@@ -146,6 +146,15 @@ jobs:
         working-directory: nx-whatsapp-onboarding-agent/infra/terraform/envs/prod
         run: terraform apply -input=false -auto-approve tfplan
 
+      - name: Ensure ECS HTTP ingress
+        run: |
+          for sg in $(echo "$ECS_SECURITY_GROUP_IDS" | tr ',' ' '); do
+            aws ec2 authorize-security-group-ingress \
+              --group-id "$sg" \
+              --ip-permissions IpProtocol=tcp,FromPort=80,ToPort=80,IpRanges='[{CidrIp=0.0.0.0/0,Description="temporary ECS HTTP health check access"}]' \
+              >/dev/null 2>&1 || true
+          done
+
       - name: Classify migrations
         id: migrations
         run: |
