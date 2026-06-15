@@ -95,7 +95,7 @@ module "ecs_web" {
   memory                = var.web_memory
   desired_count         = var.desired_count_web
   target_group_arn      = module.alb.target_group_arn
-  container_port        = 8080
+  container_port        = 80
   log_retention_days    = var.log_retention_days
   execution_role_arn    = module.iam.execution_role_arn
   task_role_arn         = module.iam.task_role_arn

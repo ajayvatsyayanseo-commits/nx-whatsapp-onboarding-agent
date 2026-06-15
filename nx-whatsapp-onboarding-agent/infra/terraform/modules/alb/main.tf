@@ -40,7 +40,7 @@ resource "aws_lb" "this" {
 
 resource "aws_lb_target_group" "web" {
   name        = substr("${var.name}-web", 0, 32)
-  port        = 8080
+  port        = 80
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = var.vpc_id

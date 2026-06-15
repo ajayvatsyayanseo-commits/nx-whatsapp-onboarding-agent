@@ -33,7 +33,7 @@ RUN chmod +x /usr/local/bin/nxtutors-entrypoint \
     && mkdir -p storage/logs storage/framework/cache storage/framework/sessions storage/framework/views bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
 
-EXPOSE 8080
+EXPOSE 80
 
 ENTRYPOINT ["nxtutors-entrypoint"]
 CMD ["web"]
