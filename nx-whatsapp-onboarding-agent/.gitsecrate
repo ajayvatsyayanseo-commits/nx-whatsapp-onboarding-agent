@@ -1,32 +1,19 @@
-# NXtutors WhatsApp Onboarding Agent - Minimum GitHub Secrets And Variables
+# NXtutors WhatsApp Onboarding Agent - GitHub Setup Status
 
-Use this file as the checklist for GitHub:
+## Add Environment Secrets Manually
 
-```text
-Repository -> Settings -> Secrets and variables -> Actions
-```
-
-Create one GitHub Environment first:
+GitHub path:
 
 ```text
-prod
+Repository -> Settings -> Environments -> dev/staging/prod -> Environment secrets
 ```
 
-For safety, configure `prod` with required reviewers before production deploys.
+GitHub secrets cannot be blank in the UI. Use this as a checklist and paste the real value for each key.
 
-Do not commit real secret values into this file.
+### dev Environment secrets
 
-
-# =============================================================================
-# 1. Environment secrets
-# =============================================================================
-# Add these in:
-# Settings -> Environments -> prod -> Environment secrets
-#
-# These are sensitive. Do not add them as Variables.
-
+```env
 APP_KEY=
-
 DB_HOST=
 DB_PORT=3306
 DB_DATABASE=
@@ -37,269 +24,129 @@ META_WHATSAPP_VERIFY_TOKEN=
 META_WHATSAPP_APP_SECRET=
 META_WHATSAPP_ACCESS_TOKEN=
 META_WHATSAPP_PHONE_NUMBER_ID=
+```
 
+### staging Environment secrets
 
-# =============================================================================
-# 2. Optional Environment secrets
-# =============================================================================
-# Add only if you enable these features.
+```env
+APP_KEY=
+DB_HOST=
+DB_PORT=3306
+DB_DATABASE=
+DB_USERNAME=
+DB_PASSWORD=
 
-# Required only if Redis/ElastiCache uses a password.
+META_WHATSAPP_VERIFY_TOKEN=
+META_WHATSAPP_APP_SECRET=
+META_WHATSAPP_ACCESS_TOKEN=
+META_WHATSAPP_PHONE_NUMBER_ID=
+```
+
+### prod Environment secrets
+
+```env
+APP_KEY=
+DB_HOST=
+DB_PORT=3306
+DB_DATABASE=
+DB_USERNAME=
+DB_PASSWORD=
+
+META_WHATSAPP_VERIFY_TOKEN=
+META_WHATSAPP_APP_SECRET=
+META_WHATSAPP_ACCESS_TOKEN=
+META_WHATSAPP_PHONE_NUMBER_ID=
+```
+
+## Optional Secrets
+
+Add only if enabled:
+
+```env
 REDIS_PASSWORD=
-
-# Required only if dashboard magic-login is enabled.
 DASHBOARD_SIGNING_KEY=
-
-# Required only if media or analytics are stored in S3.
 AWS_S3_MEDIA_BUCKET=
 WHATSAPP_ONBOARDING_S3_MEDIA_BUCKET=
 WHATSAPP_ONBOARDING_ANALYTICS_BUCKET=
-
-# Required only if synthetic webhook smoke tests are enabled.
 SYNTHETIC_WEBHOOK_SECRET=
-
-# Required only if LLM extraction is enabled later.
 OPENAI_API_KEY=
 LLM_PROVIDER_API_KEY=
+```
 
+## Must Review In GitHub Variables
 
-# =============================================================================
-# 3. Repository secrets
-# =============================================================================
-# Keep this empty unless a secret is shared by every environment.
-#
-# Do not add AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY.
-# GitHub Actions should deploy with OIDC and AWS role assumption.
+These were uploaded with placeholder values and must be replaced before AWS deployment:
 
+```text
+AWS_DEV_DEPLOY_ROLE_ARN
+AWS_STAGING_DEPLOY_ROLE_ARN
+AWS_PROD_DEPLOY_ROLE_ARN
+AWS_TERRAFORM_PLAN_ROLE_ARN
+ECS_SUBNET_IDS
+ECS_SECURITY_GROUP_IDS
+WEBHOOK_VERIFY_URL
+SYNTHETIC_WEBHOOK_URL
+```
 
-# =============================================================================
-# 4. Repository variables - minimum app runtime
-# =============================================================================
-# Add these in:
-# Settings -> Secrets and variables -> Actions -> Variables -> Repository variables
-#
-# These are non-sensitive values.
+Also confirm these match your actual AWS resources:
 
-APP_ENV=production
-APP_URL=https://whatsapp.nxtutors.com
+```text
+APP_URL
+ECR_REPOSITORY
+ECS_CLUSTER
+ECS_WEB_SERVICE
+ECS_WORKER_SERVICE
+ECS_WEB_TASK_FAMILY
+ECS_WORKER_TASK_FAMILY
+```
 
-DB_CONNECTION=mysql
-WHATSAPP_ONBOARDING_DB_CONNECTION=mysql
+## Production Safety
 
-REDIS_CONNECTION=default
-REDIS_HOST=
-REDIS_PORT=6379
-QUEUE_CONNECTION=redis
-WHATSAPP_ONBOARDING_REDIS_CONNECTION=default
-WHATSAPP_ONBOARDING_QUEUE=whatsapp-onboarding
+Keep this value false until a test signup has been verified end to end:
 
-WHATSAPP_ONBOARDING_ENABLED=true
-WHATSAPP_SIGNUP_ENABLED=true
-WHATSAPP_STUDENT_SIGNUP_ENABLED=true
-WHATSAPP_TUTOR_SIGNUP_ENABLED=true
-
-# Keep false first. Change to true only after staging/test DB signup works.
+```text
 WHATSAPP_CREATE_REAL_PROFILE=false
+```
 
-WHATSAPP_ONBOARDING_PAUSED=false
-WHATSAPP_ONBOARDING_PAUSE_REASON=
-WHATSAPP_OUTBOUND_PAUSED=false
+After staging/test signup writes correctly to the existing `register` table, change production to:
 
+```text
+WHATSAPP_CREATE_REAL_PROFILE=true
+```
 
-# =============================================================================
-# 5. Repository variables - NXtutors website compatibility
-# =============================================================================
+## Media Storage Choice
 
-NXTUTORS_LEGACY_WEBSITE_MODE=true
-NXTUTORS_LOGIN_IDENTIFIER=email
-NXTUTORS_STUDENT_JOIN_AS=student
-NXTUTORS_TUTOR_JOIN_AS=teacher
-NXTUTORS_STUDENT_USER_TYPE=student
-NXTUTORS_TUTOR_USER_TYPE=Individual
-NXTUTORS_STATUS_ACTIVE_VALUE=t
-NXTUTORS_OTP_VERIFIED_VALUE=t
-NXTUTORS_USER_ID_MODE=legacy_numeric
-NXTUTORS_MYSQL_USER_ID_LOCK_NAME=nxtutors_register_user_id_generation
-NXTUTORS_USER_ID_MAX_RETRIES=5
-NXTUTORS_PHONE_STORAGE_FORMAT=digits10_or_country_digits
-NXTUTORS_STORE_C_PASSWORD=false
-NXTUTORS_FORCE_PASSWORD_RESET_IF_COLUMN_EXISTS=true
-NXTUTORS_TUTOR_REQUIRE_DOCUMENTS_BEFORE_CREATE=false
+If ECS can write to the same website storage path:
 
-WHATSAPP_PHONE_NUMBER=917836034313
-WHATSAPP_STUDENT_STATUS=t
-WHATSAPP_TUTOR_STATUS=t
-WHATSAPP_OTP_STATUS_VERIFIED=t
-WHATSAPP_TUTOR_DOCUMENTS_REQUIRE_REVIEW=false
-
-
-# =============================================================================
-# 6. Repository variables - URLs
-# =============================================================================
-
-TERMS_STUDENT_URL=https://www.nxtutors.com/terms-conditions
-PRIVACY_STUDENT_URL=https://www.nxtutors.com/privacy-policy
-TERMS_TUTOR_URL=https://www.nxtutors.com/terms-conditions
-PRIVACY_TUTOR_URL=https://www.nxtutors.com/privacy-policy
-TERMS_VERSION=2026-terms-v1
-TERMS_ALLOW_LOCAL_PLACEHOLDER=false
-
-STUDENT_DASHBOARD_URL=https://www.nxtutors.com/user/dashboard
-TUTOR_DASHBOARD_URL=https://www.nxtutors.com/teacher/dashboard
-WHATSAPP_ONBOARDING_LOGIN_URL=https://www.nxtutors.com/login
-STUDENT_CHANGE_PASSWORD_URL=https://www.nxtutors.com/user/change-password
-TUTOR_CHANGE_PASSWORD_URL=https://www.nxtutors.com/teacher/change-password
-
-WHATSAPP_ONBOARDING_ROUTE_PREFIX=whatsapp/onboarding
-
-
-# =============================================================================
-# 7. Repository variables - Meta WhatsApp
-# =============================================================================
-
-META_WHATSAPP_API_VERSION=v20.0
-META_GRAPH_BASE_URL=https://graph.facebook.com
-META_WHATSAPP_INTERACTIVE_ENABLED=true
-META_REQUIRE_TEMPLATE_OUTSIDE_SESSION=true
-META_WHATSAPP_TEMPLATE_LANGUAGE=en_US
-
-# These must match approved template names in Meta.
-META_TEMPLATE_SIGNUP_RESUME=signup_resume
-META_TEMPLATE_OTP_MESSAGE=otp_message
-META_TEMPLATE_PROFILE_CREATED=profile_created
-META_TEMPLATE_HUMAN_HANDOFF=human_handoff
-
-
-# =============================================================================
-# 8. Repository variables - AWS ECS deployment
-# =============================================================================
-# Required by the GitHub deploy workflows.
-# Replace placeholder values with your real AWS resources.
-
-DEPLOY_TARGET=ecs
-CREATE_LAMBDA_FUNCTION=false
-
-AWS_REGION=ap-south-1
-AWS_PROD_DEPLOY_ROLE_ARN=arn:aws:iam::PROD_ACCOUNT_ID:role/nxtutors-whatsapp-onboarding-prod-github-deploy
-AWS_TERRAFORM_PLAN_ROLE_ARN=arn:aws:iam::PROD_ACCOUNT_ID:role/nxtutors-whatsapp-onboarding-prod-github-plan
-
-ECR_REPOSITORY=nxtutors-whatsapp-onboarding
-ECS_CLUSTER=nxtutors-prod
-ECS_WEB_SERVICE=nxtutors-whatsapp-onboarding-prod-web
-ECS_WORKER_SERVICE=nxtutors-whatsapp-onboarding-prod-worker
-ECS_WEB_TASK_FAMILY=nxtutors-whatsapp-onboarding-prod-web
-ECS_WORKER_TASK_FAMILY=nxtutors-whatsapp-onboarding-prod-worker
-
-ECS_SUBNET_IDS=subnet-xxxxxxxx,subnet-yyyyyyyy
-ECS_SECURITY_GROUP_IDS=sg-xxxxxxxx
-
-WEBHOOK_VERIFY_URL=https://whatsapp.nxtutors.com/whatsapp/onboarding/webhook?hub.mode=subscribe&hub.verify_token=REDACTED&hub.challenge=ok
-
-# Optional. Keep blank unless you have this internal route.
-SYNTHETIC_WEBHOOK_URL=
-
-
-# =============================================================================
-# 9. Repository variables - security and performance defaults
-# =============================================================================
-
-LOG_CHANNEL=stack
-HASH_DRIVER=bcrypt
-
-WHATSAPP_ONBOARDING_TEMP_PASSWORD_LENGTH=18
-WHATSAPP_ONBOARDING_FORCE_RESET_COLUMN=force_password_reset
-
-WHATSAPP_ONBOARDING_OTP_LENGTH=6
-WHATSAPP_ONBOARDING_OTP_TTL_MINUTES=10
-WHATSAPP_ONBOARDING_OTP_MAX_ATTEMPTS=3
-WHATSAPP_ONBOARDING_OTP_RESEND_COOLDOWN_SECONDS=60
-
-WHATSAPP_ONBOARDING_CONVERSATION_TTL_MINUTES=10080
-WHATSAPP_ONBOARDING_REDIS_TTL_SECONDS=86400
-WHATSAPP_ONBOARDING_MAX_INVALID_ATTEMPTS=8
-WHATSAPP_ONBOARDING_MAX_INVALID_ATTEMPTS_PER_FIELD=3
-WHATSAPP_ONBOARDING_MIN_AGE_YEARS=0
-
-WHATSAPP_ONBOARDING_MAX_WEBHOOK_BYTES=262144
-WHATSAPP_ONBOARDING_MAX_MESSAGE_LENGTH=2000
-WHATSAPP_ONBOARDING_INBOUND_PER_PHONE_MINUTE=30
-WHATSAPP_ONBOARDING_INBOUND_PER_IP_MINUTE=120
-WHATSAPP_ONBOARDING_BLOCK_INJECTION_PATTERNS=true
-WHATSAPP_ONBOARDING_INDIA_PINCODE=true
-WHATSAPP_ONBOARDING_MASK_PII_LOGS=true
-WHATSAPP_ONBOARDING_ENCRYPT_SENSITIVE_DRAFTS=true
-
-WHATSAPP_ONBOARDING_MAX_MESSAGES_PER_PHONE_HOUR=20
-WHATSAPP_ONBOARDING_MAX_MESSAGES_GLOBAL_MINUTE=1000
-WHATSAPP_ONBOARDING_MAX_MEDIA_DOWNLOAD_MB=25
-META_CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
-META_CIRCUIT_BREAKER_COOLDOWN_SECONDS=60
-
-
-# =============================================================================
-# 10. Repository variables - media storage
-# =============================================================================
-# If ECS shares the same website storage, use legacy_public_user.
-# If ECS is separate and cannot write to website storage, use s3 instead.
-
+```text
 MEDIA_STORAGE_DRIVER=legacy_public_user
 WHATSAPP_ONBOARDING_LOCAL_MEDIA_PATH=storage/user
 WHATSAPP_ONBOARDING_MEDIA_DB_VALUE=filename_only
-WHATSAPP_ONBOARDING_MEDIA_MAX_KB=2048
-WHATSAPP_ONBOARDING_DEGREE_ALLOWS_PDF=true
+```
 
-# Use only when MEDIA_STORAGE_DRIVER=s3.
+If ECS is separate and cannot share `public/storage/user`, change to S3:
+
+```text
+MEDIA_STORAGE_DRIVER=s3
 AWS_S3_MEDIA_PREFIX=nxtutors/onboarding
+```
 
+Then add the S3 bucket secrets listed above.
 
-# =============================================================================
-# 11. Optional Repository variables - LLM extraction
-# =============================================================================
-# The flow works without LLM. Keep disabled.
+## Do Not Add
 
-WHATSAPP_ONBOARDING_LLM_ENABLED=false
-WHATSAPP_ONBOARDING_LLM_DAILY_TOKEN_BUDGET=0
-LLM_MAX_CALLS_PER_CONVERSATION=2
-LLM_MAX_TOKENS_PER_CALL=600
-LLM_TIMEOUT_MS=1500
-LLM_DAILY_BUDGET_INR=0
-LLM_DAILY_BUDGET_USD=0
-LLM_LATENCY_BREAKER_MS=2500
-LLM_ERROR_RATE_BREAKER_PERCENT=20
+Do not add long-lived AWS access keys to GitHub:
 
+```text
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+```
 
-# =============================================================================
-# 12. Optional Repository variables - observability and analytics
-# =============================================================================
-# Add these now if you want CloudWatch/analytics exports.
-# Otherwise these defaults are safe.
+Use GitHub OIDC with AWS role ARN variables instead.
 
-AWS_SECRETS_MANAGER_PREFIX=/nxtutors/whatsapp-onboarding
-WHATSAPP_ONBOARDING_EVENTBRIDGE_BUS=
+Do not create Lambda for the main agent:
 
-WHATSAPP_ONBOARDING_LOG_CHANNEL=stack
-WHATSAPP_ONBOARDING_AUDIT_ENABLED=true
-WHATSAPP_ONBOARDING_METRICS_NAMESPACE=NXtutors/WhatsAppOnboarding
-WHATSAPP_ONBOARDING_TRACE_SAMPLE_RATE=0.1
-
-WHATSAPP_ONBOARDING_INCOMPLETE_DRAFT_RETENTION_DAYS=14
-WHATSAPP_ONBOARDING_RAW_WEBHOOK_RETENTION_DAYS=7
-WHATSAPP_ONBOARDING_STORE_RAW_WEBHOOK_PAYLOAD=true
-WHATSAPP_ONBOARDING_S3_RAW_PAYLOAD_EXPORT_ENABLED=false
-
-WHATSAPP_ONBOARDING_ANALYTICS_DISK=local
-WHATSAPP_ONBOARDING_ANALYTICS_PREFIX=nxtutors/onboarding_events
-
-WHATSAPP_ONBOARDING_DRIFT_MIN_COMPLETION_RATE=40
-WHATSAPP_ONBOARDING_DRIFT_MAX_HANDOFF_RATE=25
-WHATSAPP_ONBOARDING_DRIFT_MAX_META_FAILURES=20
-
-
-# =============================================================================
-# Final notes
-# =============================================================================
-# 1. Do not create Lambda for the main agent.
-# 2. Do not add AWS access keys. Use GitHub OIDC + AWS role ARN.
-# 3. Replace AWS role, subnet, security group, ECS, and URL placeholders.
-# 4. Keep WHATSAPP_CREATE_REAL_PROFILE=false until a test signup is verified.
-# 5. If ECS cannot access public/storage/user, change MEDIA_STORAGE_DRIVER=s3.
+```text
+CREATE_LAMBDA_FUNCTION=false
+DEPLOY_TARGET=ecs
+```
