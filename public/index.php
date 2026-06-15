@@ -13,7 +13,7 @@ function json_response(array $payload, int $status = 200): never
     exit;
 }
 
-if ($path === '/health/live' || $path === '/health/Live') {
+if ($path === '/' || $path === '/health/live' || $path === '/health/Live') {
     json_response(['status' => 'ok', 'service' => 'nxtutors-whatsapp-onboarding']);
 }
 
