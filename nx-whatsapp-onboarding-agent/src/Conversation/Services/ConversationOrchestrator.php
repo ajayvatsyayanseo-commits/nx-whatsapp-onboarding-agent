@@ -22,6 +22,7 @@ use NxTutors\WhatsAppOnboarding\Profile\Repositories\RegisterRepository;
 use NxTutors\WhatsAppOnboarding\Profile\Services\DashboardLinkService;
 use NxTutors\WhatsAppOnboarding\Profile\Services\ProfileCreationDispatcher;
 use NxTutors\WhatsAppOnboarding\Profile\Services\ProfileFeatureFlagService;
+use NxTutors\WhatsAppOnboarding\Profile\Services\LoginMessageBuilder;
 use NxTutors\WhatsAppOnboarding\Profile\Services\ProfileReadinessGuard;
 use NxTutors\WhatsAppOnboarding\Security\AbuseDetection\AbuseDetector;
 use NxTutors\WhatsAppOnboarding\Security\AbuseDetection\MediaValidationService;
@@ -35,6 +36,7 @@ use NxTutors\WhatsAppOnboarding\Student\Validators\StudentFieldValidator;
 use NxTutors\WhatsAppOnboarding\Tutor\Flow\TutorChecklistBuilder;
 use NxTutors\WhatsAppOnboarding\Tutor\Flow\TutorFlowDefinition;
 use NxTutors\WhatsAppOnboarding\Tutor\Flow\TutorQuestionSet;
+use NxTutors\WhatsAppOnboarding\Tutor\Services\TutorPartnerPrefillParser;
 use NxTutors\WhatsAppOnboarding\Tutor\Validators\TutorFieldValidator;
 use NxTutors\WhatsAppOnboarding\WhatsApp\DTO\InboundWhatsAppMessage;
 use NxTutors\WhatsAppOnboarding\WhatsApp\Services\MetaPayloadParser;
@@ -69,8 +71,10 @@ final readonly class ConversationOrchestrator
         private ProfileCreationDispatcher $profileCreation,
         private ProfileFeatureFlagService $featureFlags,
         private DashboardLinkService $dashboardLinks,
+        private LoginMessageBuilder $loginMessages,
         private StudentChecklistBuilder $studentChecklist,
         private TutorChecklistBuilder $tutorChecklist,
+        private TutorPartnerPrefillParser $tutorPrefillParser,
         private CircuitBreakerService $circuitBreaker,
         private HumanHandoffInterface $humanHandoff,
         private OnboardingAuditLogger $audit,
@@ -139,15 +143,19 @@ final readonly class ConversationOrchestrator
             ]);
             $event->forceFill(['onboarding_conversation_id' => $conversation->id])->save();
             $this->messages->sendText($phone, __('nx-whatsapp-onboarding::common.duplicate_phone_login_help'));
-            $this->handoff($conversation, 'Duplicate phone account conflict.', HandoffReasonCode::DuplicateAccount);
+            $this->states->transition($conversation, ConversationState::ExistingAccount, []);
             return;
         }
 
         $role = $this->intentDetector->detectRole($text);
+        $prefill = $this->tutorPrefillParser->parse($text);
+        if ($prefill !== []) {
+            $role = 'tutor';
+        }
         $conversation = $this->states->startOrResume($phone, [
             'current_state' => $role === null ? ConversationState::WaitingRoleSelection->value : $this->firstStateForRole($role)->value,
             'role' => $role,
-            'context' => ['wa_phone' => $phone, 'phone' => $phone, 'role' => $role],
+            'context' => array_merge(['wa_phone' => $phone, 'phone' => $phone, 'role' => $role], $prefill),
         ]);
         $event->forceFill(['onboarding_conversation_id' => $conversation->id])->save();
         $this->cache->put($conversation);
@@ -299,7 +307,7 @@ final readonly class ConversationOrchestrator
         $fresh = $this->transitionTo($conversation, $next, [
             'role' => $role,
             'wa_phone' => $conversation->wa_phone,
-            'phone' => $this->masker->maskValue('phone', $conversation->wa_phone),
+            'phone' => $conversation->wa_phone,
         ]);
 
         $fresh->forceFill(['role' => $role, 'terms_url' => $this->terms->termsUrlForRole($role)])->save();
@@ -348,6 +356,8 @@ final readonly class ConversationOrchestrator
         }
 
         if ($field === 'document_number' && $this->registers->findByDocumentNumber($value) !== null) {
+            $this->transitionTo($conversation, ConversationState::DuplicateDocumentReview, []);
+            $this->messages->sendText($conversation->wa_phone, __('nx-whatsapp-onboarding::common.duplicate_document_review'));
             $this->handoff($conversation, 'Duplicate tutor document number requiring manual review.', HandoffReasonCode::DuplicateAccount);
             return;
         }
@@ -449,7 +459,12 @@ final readonly class ConversationOrchestrator
 
     private function createProfileAndSendLogin(OnboardingConversation $conversation, bool $isRecovery): void
     {
-        $context = array_merge($conversation->context ?? [], ['role' => $conversation->role, 'phone' => $conversation->wa_phone]);
+        $context = array_merge($conversation->context ?? [], [
+            'role' => $conversation->role,
+            'phone' => $conversation->wa_phone,
+            'terms_accepted_at' => optional($conversation->terms_accepted_at)->toDateTimeString(),
+            'otp_verified_at' => optional($conversation->otp_verified_at)->toDateTimeString(),
+        ]);
         $ready = $this->readiness->check((string) $conversation->role, $context);
 
         if (! $ready->valid) {
@@ -488,15 +503,7 @@ final readonly class ConversationOrchestrator
         $this->audit->log($conversation->refresh(), 'profile_created', ['user_id' => $result->register->user_id, 'status' => $result->register->status]);
         $this->audit->log($conversation->refresh(), 'temp_password_issued', ['user_id' => $result->register->user_id]);
         $this->audit->log($conversation->refresh(), 'dashboard_link_issued', ['magic_login' => (bool) config('whatsapp_onboarding.dashboard.magic_login_enabled')]);
-        $messageKey = $role === 'tutor' && (string) $result->register->status === 'pending_review'
-            ? 'nx-whatsapp-onboarding::common.signup_complete_tutor_pending'
-            : 'nx-whatsapp-onboarding::common.signup_complete';
-        $this->messages->sendText($conversation->wa_phone, __($messageKey, [
-            'phone' => $this->masker->maskValue('phone', $conversation->wa_phone),
-            'password' => $result->temporaryPassword,
-            'dashboard' => $dashboard,
-            'checklist' => $checklist,
-        ]));
+        $this->messages->sendText($conversation->wa_phone, $this->loginMessages->build($role, $result->register, $result->temporaryPassword, $dashboard, $checklist));
     }
 
     /** @param array<string, mixed> $metadata */

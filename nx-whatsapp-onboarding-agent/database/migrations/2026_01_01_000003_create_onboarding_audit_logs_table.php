@@ -14,8 +14,8 @@ return new class extends Migration {
             $table->foreignId('onboarding_conversation_id')->nullable()->constrained('onboarding_conversations')->nullOnDelete();
             $table->string('action', 120);
             $table->string('actor', 80)->default('system');
-            $table->jsonb('masked_metadata')->default('{}');
-            $table->timestampTz('created_at')->useCurrent();
+            $table->json('masked_metadata')->nullable();
+            $table->timestamp('created_at')->useCurrent();
 
             $table->index(['onboarding_conversation_id', 'created_at'], 'onboarding_audit_conversation_created_idx');
         });

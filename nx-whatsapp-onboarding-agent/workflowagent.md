@@ -1,21 +1,54 @@
 # NXtutors WhatsApp Agent Working Flow
 
-This file explains how the WhatsApp onboarding agent works from the user's first WhatsApp message to the final website database update.
+This file explains how the WhatsApp onboarding agent works with the current NXtutors website database.
 
 ## Short Answer
 
-Yes, the WhatsApp agent is designed to create the student or tutor account in the existing NXtutors website database table named `register`.
+Yes. The WhatsApp agent can create real student and tutor accounts in the existing website database table:
 
-It will update the same website database only when:
+```text
+register
+```
 
-- This package is installed inside the existing Laravel/PHP website project.
-- The Laravel `.env` database settings point to the real website database.
-- `WHATSAPP_CREATE_REAL_PROFILE=true`.
-- The required WhatsApp signup steps are completed.
+For the current website setup, the database is MySQL/MariaDB and is visible in phpMyAdmin. The agent should be installed inside the existing Laravel website project, or connected to the same database connection that the website uses.
 
-Important: the implementation was designed for AWS Aurora PostgreSQL. If your current website database is MySQL and you view it in phpMyAdmin, the profile-writing code can still use Laravel/Eloquent, but the provided compatibility/index migrations must be reviewed or adjusted for MySQL before running them. Do not run PostgreSQL-specific migrations directly on MySQL.
+The profile is created only when:
 
-## What The User Sees On WhatsApp
+- `WHATSAPP_CREATE_REAL_PROFILE=true`
+- The user completes the WhatsApp signup flow
+- Terms and privacy are accepted
+- OTP is verified
+- Duplicate checks pass
+
+## Current Website Mode
+
+Use these values for the existing NXtutors website:
+
+```env
+DB_CONNECTION=mysql
+WHATSAPP_ONBOARDING_DB_CONNECTION=mysql
+NXTUTORS_LEGACY_WEBSITE_MODE=true
+NXTUTORS_LOGIN_IDENTIFIER=email
+NXTUTORS_USER_ID_MODE=legacy_numeric
+
+NXTUTORS_STUDENT_JOIN_AS=student
+NXTUTORS_STUDENT_USER_TYPE=student
+
+NXTUTORS_TUTOR_JOIN_AS=teacher
+NXTUTORS_TUTOR_USER_TYPE=Individual
+
+WHATSAPP_STUDENT_STATUS=t
+WHATSAPP_TUTOR_STATUS=t
+WHATSAPP_OTP_STATUS_VERIFIED=t
+
+MEDIA_STORAGE_DRIVER=legacy_public_user
+WHATSAPP_ONBOARDING_LOCAL_MEDIA_PATH=storage/user
+WHATSAPP_ONBOARDING_MEDIA_DB_VALUE=filename_only
+```
+
+Important: The current website login is email/password. The WhatsApp number is collected, verified, and stored in `register.phone`, but the final login message should show the masked email and temporary password.
+
+## What The User Sees
 
 Example student signup:
 
@@ -53,11 +86,10 @@ Reply CONFIRM to continue, or EDIT field_name.
 
 User: CONFIRM
 
-Bot: Please open and read these before continuing:
+Bot: Please read NXtutors Terms and Privacy Policy before account creation:
 Terms: https://www.nxtutors.com/terms-conditions
 Privacy: https://www.nxtutors.com/privacy-policy
-
-Reply exactly I AGREE to continue.
+Reply I AGREE to continue.
 
 User: I AGREE
 
@@ -66,87 +98,67 @@ Bot: Sends OTP using approved WhatsApp OTP template.
 User: 123456
 
 Bot: Your NXtutors profile is ready.
-Login phone: +91******1234
+Login email: a***@example.com
 Temporary password: shown once
-Dashboard: student dashboard link
+Login page: https://www.nxtutors.com/login
+Dashboard after login: https://www.nxtutors.com/user/dashboard
+Please change your password after login.
 ```
 
-Example tutor signup is similar, but the bot also asks for education, experience, document type, document number, degree/document uploads, profile title, and profile descriptions.
+Tutor signup is similar, but the bot also asks for education, experience, classes/subjects, document type, document number, optional media uploads, profile title, and profile descriptions.
 
 ## Backend Flow
 
 ```mermaid
 flowchart TD
     A[User sends signup on WhatsApp] --> B[Meta sends webhook to Laravel]
-    B --> C[Webhook controller verifies signature]
-    C --> D[Store inbound event in onboarding_events]
-    D --> E[Queue ProcessInboundWhatsAppEventJob]
-    E --> F[ConversationOrchestrator loads conversation state]
-    F --> G[Finite state machine decides next step]
+    B --> C[Webhook controller verifies request]
+    C --> D[Store inbound event]
+    D --> E[Queue processing job]
+    E --> F[Load conversation state]
+    F --> G[Run deterministic state machine]
     G --> H[Validate user reply]
-    H --> I[Save draft in onboarding_conversations]
-    I --> J[Ask next WhatsApp question]
+    H --> I[Save draft state]
+    I --> J[Ask next question]
     J --> K[Review summary]
     K --> L[Terms and privacy acceptance]
     L --> M[OTP verification]
-    M --> N[Duplicate phone/email/document checks]
-    N --> O[Create profile in register table]
-    O --> P[Send login phone, temp password, dashboard link]
+    M --> N[Duplicate checks]
+    N --> O[Create row in register table]
+    O --> P[Send login email, temporary password, and dashboard link]
 ```
 
-## When The Website Database Is Updated
+No controller writes directly to the `register` table. The controller only verifies the webhook, stores the event, queues a job, and returns quickly.
 
-The website `register` table is not updated immediately when the user types `signup`.
+## When The Register Table Is Updated
 
-The database profile is created only after all of these are true:
+The `register` table is not updated when the user first types `signup`.
+
+The final database insert happens only after:
 
 1. Required fields are collected.
-2. Every field is valid.
-3. Terms and privacy link are shown.
-4. User replies exactly `I AGREE`, `AGREE`, or `YES I AGREE`.
+2. Field validation passes.
+3. Terms and privacy links are shown.
+4. User replies `I AGREE`, `AGREE`, or `YES I AGREE`.
 5. OTP is verified.
-6. Duplicate checks pass for phone, email, and tutor document number.
-7. `WHATSAPP_CREATE_REAL_PROFILE=true`.
+6. Duplicate phone/email/document checks pass.
+7. Real profile creation is enabled.
 
-Until then, the data stays as an onboarding draft in:
+Before that, data stays in onboarding tables:
 
 ```text
 onboarding_conversations
 onboarding_events
 onboarding_audit_logs
 onboarding_terms_acceptances
-human_handoff_tickets, only if support is needed
+human_handoff_tickets
 ```
 
-## Which Website Table Gets Updated
-
-The final website account is inserted into:
-
-```text
-register
-```
-
-The module uses this model:
-
-```text
-src/Profile/Models/Register.php
-```
-
-The actual field mapping is handled by:
-
-```text
-src/Profile/Services/RegisterSchemaMapper.php
-```
-
-That mapper protects the old website schema from random conversation data. The WhatsApp draft array does not write directly to `register`.
-
-## Student Database Mapping
-
-For a student, the agent writes values like this:
+## Student Register Mapping
 
 | WhatsApp data | `register` column |
 |---|---|
-| generated student ID | `user_id` |
+| generated numeric ID | `user_id` |
 | full name | `name` |
 | email | `email` |
 | WhatsApp phone | `phone` |
@@ -160,157 +172,90 @@ For a student, the agent writes values like this:
 | class/course needed | `for_class` |
 | budget | `budget` |
 | address/city/district/state/pincode | matching address columns |
-| OTP verified | `otp_status = verified` |
-| account status | `status = active`, unless config changes it |
+| OTP verified | `otp_status = t` |
+| account status | `status = t` |
 | created date/time | `date` |
 | student need summary | `profile`, `profile_desc`, `pro_desc` where useful |
 
-## Tutor Database Mapping
-
-For a tutor, the agent writes values like this:
+## Tutor Register Mapping
 
 | WhatsApp data | `register` column |
 |---|---|
-| generated tutor ID | `user_id` |
+| generated numeric ID | `user_id` |
 | full name | `name` |
 | email | `email` |
 | WhatsApp phone | `phone` |
 | hashed temporary password | `password` |
 | no plaintext confirm password | `c_password = null` |
-| tutor role | `user_type = tutor` |
-| tutor join type | `join_as = tutor` |
+| tutor user type | `user_type = Individual` |
+| tutor join type | `join_as = teacher` |
 | education | `education` |
 | other education | `other_education` |
 | experience | `experience` |
-| degree certificate path | `degree` |
+| degree certificate filename | `degree` |
 | class/course type | `class_type` |
 | classes/subjects tutor can teach | `for_class` |
 | fee/budget | `budget` |
 | document type | `document_type` |
 | document number | `document_number` |
-| front document image | `frount_image` |
-| back document image | `back_image` |
+| front document image filename | `frount_image` |
+| back document image filename | `back_image` |
 | profile title | `profile` |
 | profile description | `profile_desc` |
 | professional description | `pro_desc` |
-| OTP verified | `otp_status = verified` |
-| account status | `status = pending_review`, by default |
+| OTP verified | `otp_status = t` |
+| account status | `status = t` |
 | created date/time | `date` |
 
-The old spelling `frount_image` is intentionally preserved because the current website may already depend on that column name.
+The old spelling `frount_image` is intentionally preserved because existing website code may already depend on that column name. Internally the module uses the cleaner name `front_image`.
 
-## Password And Login Behavior
+## Password And Login
 
-The agent does not store permanent plaintext passwords.
+The agent never stores or sends a permanent plaintext password.
 
 At the end of signup:
 
 1. A secure temporary password is generated.
-2. The user sees it only once on WhatsApp.
+2. The user sees it once on WhatsApp.
 3. Laravel stores only the hash in `register.password`.
 4. `register.c_password` stays `null`.
 5. The user is told to change the password after login.
-6. A force-password-reset flag is stored in onboarding metadata, or in `register.force_password_reset` if the safe compatibility column exists.
 
-The login identifier is the user's phone number.
-
-If the existing website currently supports only email/password login, you need to add a small website login adapter:
+Current website behavior:
 
 ```text
-User enters phone + password
-Laravel finds register.phone
-Laravel checks password with Hash::check
-If force_password_reset=true, redirect to change password page
-Then open student/tutor dashboard
+User opens https://www.nxtutors.com/login
+User enters email + temporary password
+Website checks register.email and register.password
+User changes password after first login
+Dashboard opens
 ```
 
-This does not break the old email/password login. It adds phone/password login as another option.
+If the website later adds phone login, keep it as an extra adapter. Do not remove the existing email/password login.
 
-## Does It Work With The Current phpMyAdmin MySQL Database?
+## Media Uploads
 
-phpMyAdmin usually means the current website database is MySQL or MariaDB.
-
-The answer is:
+For the current legacy website, media should be saved in:
 
 ```text
-Profile insert/update: yes, possible through Laravel/Eloquent.
-Provided migrations/indexes: PostgreSQL-first, must be checked before MySQL use.
-AWS production target: Aurora PostgreSQL.
+public/storage/user
 ```
 
-If you keep MySQL for now:
-
-1. Set Laravel `.env` to your current MySQL database:
-
-```env
-DB_CONNECTION=mysql
-DB_HOST=your_mysql_host
-DB_PORT=3306
-DB_DATABASE=your_existing_database
-DB_USERNAME=your_database_user
-DB_PASSWORD=your_database_password
-```
-
-2. Install the package inside the same Laravel website.
-3. Keep `WHATSAPP_CREATE_REAL_PROFILE=false` until testing is finished.
-4. Review migrations before running them on MySQL, especially partial unique indexes.
-5. After testing the flow, set:
-
-```env
-WHATSAPP_CREATE_REAL_PROFILE=true
-```
-
-Then new WhatsApp signups can create rows in the same `register` table visible in phpMyAdmin.
-
-## MySQL Compatibility Warning
-
-This package was requested and built as PostgreSQL-safe for AWS Aurora PostgreSQL.
-
-PostgreSQL supports partial unique indexes like:
+The `register` table should store only the filename, for example:
 
 ```text
-unique phone where phone is not null and phone != ''
+whatsapp_degree_20260614_abcd1234.pdf
 ```
 
-MySQL handles this differently. Before using the migrations on MySQL, convert the compatibility index migration to MySQL-safe indexes, or add the indexes manually in phpMyAdmin.
+This matches the style many older Laravel/phpMyAdmin websites use for uploaded user files.
 
-Do not run migrations blindly on the live website database.
-
-## Safe Rollout Plan For Existing Website
-
-Use this order:
-
-1. Install the package in a local/staging copy of the website.
-2. Point it to a copied test database, not production.
-3. Set:
-
-```env
-WHATSAPP_CREATE_REAL_PROFILE=false
-```
-
-4. Send test WhatsApp messages and verify draft rows are created.
-5. Run one student and one tutor test signup.
-6. Check validation, terms, OTP, and review summary.
-7. Set:
-
-```env
-WHATSAPP_CREATE_REAL_PROFILE=true
-```
-
-8. Run one test student signup.
-9. Confirm a new row appears in `register`.
-10. Confirm password is hashed and `c_password` is null.
-11. Confirm phone login works on the website.
-12. Repeat for tutor signup.
-13. Only then enable production webhook.
-
-## What Happens If A Duplicate Account Exists
+## Duplicate Handling
 
 If phone already exists:
 
 - The bot does not create a second account.
-- It tells the user the phone already has an NXtutors account.
-- It can open a human support ticket.
+- It tells the user an NXtutors account already exists with this WhatsApp number.
+- It suggests login or human support.
 
 If email already exists:
 
@@ -318,54 +263,55 @@ If email already exists:
 
 If tutor document number already exists:
 
-- The bot does not reveal which account matched.
-- It opens a human handoff ticket for safe manual review.
+- The bot does not reveal matched account details.
+- It opens a human handoff ticket.
 
-## What Happens If Something Fails
+## Safe Rollout
 
-If Meta WhatsApp API fails:
+Use this order:
 
-- Messages retry with backoff.
-- Events remain stored.
-- Workers can retry later.
+1. Install the module in a local/staging copy of the website.
+2. Point it to a copied test database first.
+3. Keep `WHATSAPP_CREATE_REAL_PROFILE=false`.
+4. Run `php artisan nxtutors:onboarding:preflight`.
+5. Test one student signup.
+6. Test one tutor signup.
+7. Check the draft tables.
+8. Set `WHATSAPP_CREATE_REAL_PROFILE=true` in staging.
+9. Confirm a new row appears in `register`.
+10. Confirm `password` is hashed.
+11. Confirm `c_password` is empty/null.
+12. Confirm `status=t` and `otp_status=t`.
+13. Confirm website email login works.
+14. Only then enable production webhook.
 
-If database is down:
+## Useful Commands
 
-- Webhook events are already stored or queued where possible.
-- Profile creation can retry.
-- The user can be moved to human handoff.
+```bash
+php artisan migrate --path=nx-whatsapp-onboarding-agent/database/migrations
+php artisan nxtutors:onboarding:preflight
+php artisan nxtutors:onboarding:audit-register-duplicates
+php artisan nxtutors:onboarding:add-register-indexes --force
+php artisan test
+```
 
-If user gives invalid input too many times:
+Run index changes only after duplicate checks are clean and after taking a database backup.
 
-- The bot opens a human handoff ticket.
+## Final Result
 
-If signup is paused:
-
-- The bot stops new onboarding.
-- `STOP` and `UNSUBSCRIBE` still work.
-
-## Final Result In Website
-
-After a successful signup, the website database has:
+After successful signup, phpMyAdmin should show a new row in `register` with:
 
 ```text
-register row created
-phone set as login identifier
-password stored as hash
+email set
+phone set
+password stored as a hash
 c_password null
-otp_status verified
-student status active or tutor status pending_review
-student/tutor profile fields filled
-document/media paths saved for tutor when uploaded
+status t
+otp_status t
+join_as student or teacher
+user_type student or Individual
+profile fields filled
+media filenames saved for tutor uploads
 ```
 
-The user receives:
-
-```text
-masked login phone
-temporary password shown once
-dashboard link
-next-step checklist
-```
-
-That means the WhatsApp signup becomes a real NXtutors website profile, as long as the package is connected to the same database that your website uses.
+That means WhatsApp signup has become a real NXtutors website account in the existing database.

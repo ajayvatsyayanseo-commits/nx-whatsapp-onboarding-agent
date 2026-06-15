@@ -41,6 +41,7 @@ final class TermsAcceptanceService
             'onboarding_conversation_id' => $conversation->id,
             'role' => $role,
             'terms_url' => $this->termsUrlForRole($role),
+            'privacy_url' => $this->privacyUrlForRole($role),
             'terms_version' => (string) config('whatsapp_onboarding.terms.version', 'current'),
             'accepted_at' => now(),
             'acceptance_message_id' => $messageId,

@@ -17,6 +17,9 @@ enum ConversationState: string
     case CreatingProfile = 'CREATING_PROFILE';
     case Completed = 'COMPLETED';
     case HumanHandoff = 'HUMAN_HANDOFF';
+    case ExistingAccount = 'EXISTING_ACCOUNT';
+    case WaitingDifferentEmail = 'WAITING_DIFFERENT_EMAIL';
+    case DuplicateDocumentReview = 'DUPLICATE_DOCUMENT_REVIEW';
     case Cancelled = 'CANCELLED';
     case Expired = 'EXPIRED';
     case ErrorRecoverable = 'ERROR_RECOVERABLE';
@@ -65,6 +68,8 @@ enum ConversationState: string
         return in_array($this, [
             self::Completed,
             self::HumanHandoff,
+            self::ExistingAccount,
+            self::DuplicateDocumentReview,
             self::Cancelled,
             self::Expired,
             self::ErrorFinal,

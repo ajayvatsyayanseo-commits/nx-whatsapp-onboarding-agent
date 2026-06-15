@@ -4,10 +4,37 @@ Laravel package/module for deterministic WhatsApp student and tutor signup.
 
 License: proprietary. See [LICENSE](LICENSE).
 
+Website integration guide for the current Laravel/MySQL site: [docs/NXTUTORS_WEBSITE_INTEGRATION.md](docs/NXTUTORS_WEBSITE_INTEGRATION.md).
+
+## NXtutors Current Website Mode
+
+The current NXtutors website uses Laravel 12, PHP 8.2, MySQL, and the legacy `register` account table.
+
+Current production compatibility defaults:
+
+- Website login is `email + password`, not phone login.
+- The WhatsApp agent sends `login page + masked email + temporary password` by default.
+- Student dashboard is `https://www.nxtutors.com/user/dashboard`.
+- Tutor dashboard is `https://www.nxtutors.com/teacher/dashboard`.
+- `register.status` uses `t`.
+- `register.otp_status` uses `t`.
+- Student `join_as` is `student`.
+- Tutor `join_as` is `teacher`.
+- Tutor `user_type` defaults to `Individual`.
+- `c_password` is not used by website login and must remain `null` or empty for WhatsApp-created users.
+- Uploaded tutor files are stored under `public/storage/user`; DB columns store filename only.
+
+Run before enabling real profile creation:
+
+```bash
+php artisan nxtutors:onboarding:preflight
+php artisan nxtutors:onboarding:audit-register-duplicates
+```
+
 ## What It Does
 
 - Accepts WhatsApp signup intents such as `signup`, `I want to register`, `student signup`, and `tutor signup`.
-- Uses a finite state machine persisted in Aurora PostgreSQL and cached in Redis.
+- Uses a finite state machine persisted in the website database and cached through the configured Laravel cache store.
 - Validates every collected field before profile creation.
 - Creates or updates the legacy NXtutors `register` profile through a package-scoped model and mapper.
 - Keeps the legacy `frount_image` column in DB writes while exposing `front_image` internally.
@@ -67,31 +94,33 @@ META_WHATSAPP_API_VERSION=v20.0
 META_WHATSAPP_INTERACTIVE_ENABLED=true
 META_WHATSAPP_TEMPLATE_LANGUAGE=en_US
 
-TERMS_STUDENT_URL=
-PRIVACY_STUDENT_URL=
-TERMS_TUTOR_URL=
-PRIVACY_TUTOR_URL=
+TERMS_STUDENT_URL=https://www.nxtutors.com/terms-conditions
+PRIVACY_STUDENT_URL=https://www.nxtutors.com/privacy-policy
+TERMS_TUTOR_URL=https://www.nxtutors.com/terms-conditions
+PRIVACY_TUTOR_URL=https://www.nxtutors.com/privacy-policy
 TERMS_VERSION=current
 TERMS_ALLOW_LOCAL_PLACEHOLDER=false
 
-STUDENT_DASHBOARD_URL=
-TUTOR_DASHBOARD_URL=
-WHATSAPP_ONBOARDING_LOGIN_URL=
+STUDENT_DASHBOARD_URL=https://www.nxtutors.com/user/dashboard
+TUTOR_DASHBOARD_URL=https://www.nxtutors.com/teacher/dashboard
+WHATSAPP_ONBOARDING_LOGIN_URL=https://www.nxtutors.com/login
 DASHBOARD_MAGIC_LOGIN_ENABLED=false
 
 WHATSAPP_SIGNUP_ENABLED=true
 WHATSAPP_STUDENT_SIGNUP_ENABLED=true
 WHATSAPP_TUTOR_SIGNUP_ENABLED=true
 WHATSAPP_CREATE_REAL_PROFILE=true
-WHATSAPP_STUDENT_STATUS=active
-WHATSAPP_TUTOR_STATUS=pending_review
-WHATSAPP_TUTOR_DOCUMENTS_REQUIRE_REVIEW=true
+WHATSAPP_STUDENT_STATUS=t
+WHATSAPP_TUTOR_STATUS=t
+WHATSAPP_OTP_STATUS_VERIFIED=t
+WHATSAPP_TUTOR_DOCUMENTS_REQUIRE_REVIEW=false
 WHATSAPP_USER_ID_PREFIX_STUDENT=NXS
 WHATSAPP_USER_ID_PREFIX_TUTOR=NXT
 
-DB_CONNECTION=pgsql
+DB_CONNECTION=mysql
+CACHE_STORE=file
 REDIS_CONNECTION=default
-QUEUE_CONNECTION=redis
+QUEUE_CONNECTION=database
 
 WHATSAPP_ONBOARDING_OTP_TTL_MINUTES=10
 WHATSAPP_ONBOARDING_OTP_MAX_ATTEMPTS=3
@@ -101,9 +130,11 @@ WHATSAPP_ONBOARDING_ENCRYPT_SENSITIVE_DRAFTS=true
 WHATSAPP_ONBOARDING_MAX_MESSAGES_PER_PHONE_HOUR=20
 WHATSAPP_ONBOARDING_MAX_MESSAGES_GLOBAL_MINUTE=1000
 
-MEDIA_STORAGE_DRIVER=s3
+MEDIA_STORAGE_DRIVER=legacy_public_user
 AWS_S3_MEDIA_BUCKET=
 AWS_S3_MEDIA_PREFIX=nxtutors/onboarding
+WHATSAPP_ONBOARDING_LOCAL_MEDIA_PATH=storage/user
+WHATSAPP_ONBOARDING_MEDIA_DB_VALUE=filename_only
 WHATSAPP_ONBOARDING_MEDIA_MAX_KB=2048
 WHATSAPP_ONBOARDING_DEGREE_ALLOWS_PDF=true
 
@@ -166,7 +197,7 @@ Bot: Please open and read these before continuing:
 User: I AGREE
 Bot: Sends approved OTP template.
 User: 123456
-Bot: Login phone, one-time temporary password, student dashboard, checklist.
+Bot: Login page, masked email, one-time temporary password, student dashboard, checklist.
 ```
 
 Tutor:
@@ -181,7 +212,7 @@ Bot: Please enter your full name.
 ...
 Bot: Choose document type: Aadhaar, PAN, Passport, Driving License, or Voter ID.
 ...
-Bot: Login phone, one-time temporary password, tutor dashboard, checklist.
+Bot: Login page, masked email, one-time temporary password, tutor dashboard, checklist.
 ```
 
 ## Conversation Engine
@@ -312,12 +343,12 @@ Migrations are PostgreSQL-safe and reversible:
 - `human_handoff_tickets`
 - `onboarding_profile_metadata`
 - `onboarding_terms_acceptances`
-- safe compatibility migration for `register`
+- opt-in safe compatibility migration for `register`
 
-The compatibility migration:
+The compatibility migration is opt-in and does not run against `register` unless `NXTUTORS_ADD_REGISTER_COMPAT_COLUMNS=true`.
 
 - Adds nullable/defaulted `force_password_reset` only if missing.
-- Adds PostgreSQL partial unique indexes:
+- PostgreSQL-only partial unique indexes are guarded and disabled by default for the current MySQL website:
   - `register.phone` where not null and not empty
   - `register.email` where not null and not empty
   - `register.document_number` where not null and not empty
@@ -333,10 +364,10 @@ The compatibility migration:
 | WhatsApp phone | `phone` | `phone` | Login identifier; normalized E.164 where possible. |
 | temp password hash | `password` | `password` | Laravel `Hash::make`; plaintext never stored. |
 | legacy confirm password | `c_password` | `c_password` | Always null unless a documented legacy adapter requires a hash. |
-| role | `user_type`, `join_as` | `user_type`, `join_as` | `student` or `tutor`. |
-| OTP verified | `otp_status` | `otp_status` | Stored as `verified` only after OTP succeeds. |
-| profile status | `status` | `status` | Student defaults `active`; tutor defaults `pending_review`. |
-| current timestamp | `date` | `date` | PostgreSQL-safe timestamp value. |
+| role | `user_type=student`, `join_as=student` | `user_type=Individual`, `join_as=teacher` | Matches current legacy website values. |
+| OTP verified | `otp_status` | `otp_status` | Current website value is `t`. |
+| profile status | `status` | `status` | Current website value is `t`. |
+| current timestamp | `date` | `date` | Laravel timestamp value. |
 | `dob` | `dob` | `dob` | Optional; not future. |
 | `gender` | `gender` | `gender` | `male`, `female`, `other`. |
 | `class_type` | `class_type` | `class_type` | Normalized string. |
@@ -403,7 +434,7 @@ Student:
 
 ```text
 Your NXtutors profile is ready ✅
-Login phone: +91******1234
+Login email: a***@example.com
 Temporary password: [shown once]
 Dashboard: https://...
 
@@ -423,7 +454,7 @@ Tutor pending review:
 Your NXtutors profile is ready ✅
 Your tutor profile is created and pending document review.
 
-Login phone: +91******1234
+Login email: a***@example.com
 Temporary password: [shown once]
 Dashboard: https://...
 
@@ -434,8 +465,8 @@ Please change your password after login.
 
 1. Install this package through Composer path repository and run migrations.
 2. Configure `STUDENT_DASHBOARD_URL`, `TUTOR_DASHBOARD_URL`, `WHATSAPP_SIGNUP_ENABLED`, `WHATSAPP_CREATE_REAL_PROFILE`, DB, Redis, queue, Meta, and AWS/S3 env vars.
-3. Keep existing email/password login unchanged. Add a separate login adapter that accepts phone + password by looking up `register.phone` and checking `register.password` with Laravel `Hash::check`.
-4. On successful phone login, check `onboarding_profile_metadata.force_password_reset` or `register.force_password_reset` if adopted, then force the user to set a new password.
+3. Keep existing email/password login unchanged. The WhatsApp flow should send the user to the existing login page with their email and a one-time temporary password.
+4. On successful first login, check `onboarding_profile_metadata.force_password_reset` or `register.force_password_reset` if adopted, then force the user to set a new password.
 5. If magic login is enabled, validate the signed token with `SignedLoginTokenService`, require expiry, and exchange it for a normal website session. Do not expose phone or password in the URL.
 6. For production AWS, run Aurora PostgreSQL behind RDS Proxy for connection pooling, Redis/ElastiCache for cache and queues, S3 for media, and Secrets Manager for all credentials.
 

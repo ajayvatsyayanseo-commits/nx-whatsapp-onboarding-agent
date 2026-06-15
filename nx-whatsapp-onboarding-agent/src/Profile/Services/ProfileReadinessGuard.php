@@ -22,7 +22,7 @@ final readonly class ProfileReadinessGuard
     public function check(string $role, array $context): ProfileReadinessResult
     {
         $context = $this->draftCrypt->decryptContext($context);
-        $required = $role === 'tutor' ? $this->tutorFlow->requiredFields() : $this->studentFlow->requiredFields();
+        $required = $this->requiredFieldsForWebsite($role);
         $missing = [];
 
         foreach ($required as $field) {
@@ -41,5 +41,20 @@ final readonly class ProfileReadinessGuard
         }
 
         return ProfileReadinessResult::ok();
+    }
+
+    /** @return list<string> */
+    private function requiredFieldsForWebsite(string $role): array
+    {
+        if (! (bool) config('whatsapp_onboarding.nxtutors_legacy.enabled', true)) {
+            return $role === 'tutor' ? $this->tutorFlow->requiredFields() : $this->studentFlow->requiredFields();
+        }
+
+        $required = ['name', 'email', 'phone', 'terms_accepted_at', 'otp_verified_at'];
+        if ($role === 'tutor' && (bool) config('whatsapp_onboarding.nxtutors_legacy.tutor_require_documents_before_create', false)) {
+            return array_merge($required, ['document_type', 'document_number', 'front_image']);
+        }
+
+        return $required;
     }
 }

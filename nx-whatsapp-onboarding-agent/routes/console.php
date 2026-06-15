@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 
 Artisan::command('nx-whatsapp-onboarding:config-check', function (): int {
     app(\NxTutors\WhatsAppOnboarding\Contracts\PolicyGuardInterface::class)->assertSafeConfiguration();
@@ -59,3 +60,51 @@ Artisan::command('nxtutors:onboarding:privacy-delete {phone}', function (string 
 
     return self::SUCCESS;
 })->purpose('Anonymize onboarding data for privacy deletion requests.');
+
+Artisan::command('nxtutors:onboarding:audit-register-duplicates', function (): int {
+    $duplicates = app(\NxTutors\WhatsAppOnboarding\Profile\Services\RegisterCompatibilityAuditor::class)->duplicateCounts();
+    foreach ($duplicates as $field => $count) {
+        $this->line("{$field}: {$count}");
+    }
+
+    return array_sum($duplicates) > 0 ? self::FAILURE : self::SUCCESS;
+})->purpose('Audit duplicate values in the legacy register table.');
+
+Artisan::command('nxtutors:onboarding:preflight', function (): int {
+    $auditor = app(\NxTutors\WhatsAppOnboarding\Profile\Services\RegisterCompatibilityAuditor::class);
+    $report = $auditor->preflight();
+    $this->line(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+
+    return $auditor->hasBlockingPreflightFailure() ? self::FAILURE : self::SUCCESS;
+})->purpose('Validate NXtutors website compatibility before enabling WhatsApp profile creation.');
+
+Artisan::command('nxtutors:onboarding:add-register-indexes {--force}', function (): int {
+    if (! $this->option('force')) {
+        $this->error('Refusing to add indexes without --force.');
+        return self::FAILURE;
+    }
+
+    $auditor = app(\NxTutors\WhatsAppOnboarding\Profile\Services\RegisterCompatibilityAuditor::class);
+    $duplicates = $auditor->duplicateCounts();
+    if (array_sum($duplicates) > 0) {
+        $this->error('Refusing to add indexes because duplicates exist: ' . json_encode($duplicates, JSON_THROW_ON_ERROR));
+        return self::FAILURE;
+    }
+
+    foreach (['email', 'phone', 'user_id', 'document_number'] as $column) {
+        $indexName = "register_{$column}_idx";
+        if (Schema::hasColumn('register', $column) && ! Schema::hasIndex('register', $indexName)) {
+            Schema::table('register', static function (\Illuminate\Database\Schema\Blueprint $table) use ($column): void {
+                $table->index($column, "register_{$column}_idx");
+            });
+            $this->line("Added index for register.{$column}");
+            continue;
+        }
+
+        if (Schema::hasColumn('register', $column)) {
+            $this->line("Index already exists for register.{$column}");
+        }
+    }
+
+    return self::SUCCESS;
+})->purpose('Add safe non-unique register indexes after duplicate audit.');

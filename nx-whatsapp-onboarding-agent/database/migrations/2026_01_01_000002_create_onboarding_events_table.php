@@ -17,12 +17,12 @@ return new class extends Migration {
             $table->string('idempotency_key', 255)->nullable();
             $table->string('direction', 16);
             $table->string('event_type', 64);
-            $table->jsonb('payload')->default('{}');
+            $table->json('payload')->nullable();
             $table->string('status', 32)->default('queued');
-            $table->timestampTz('webhook_timestamp')->nullable();
-            $table->timestampTz('received_at')->nullable();
-            $table->timestampTz('processed_at')->nullable();
-            $table->timestampsTz();
+            $table->timestamp('webhook_timestamp')->nullable();
+            $table->timestamp('received_at')->nullable();
+            $table->timestamp('processed_at')->nullable();
+            $table->timestamps();
 
             $table->unique('wa_message_id', 'onboarding_events_wa_message_id_unique');
             $table->unique('idempotency_key', 'onboarding_events_idempotency_key_unique');

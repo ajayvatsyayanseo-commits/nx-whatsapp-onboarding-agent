@@ -16,20 +16,20 @@ return new class extends Migration {
             $table->string('current_state', 80);
             $table->string('status', 32)->default('open');
             $table->string('locale', 10)->default('en');
-            $table->jsonb('context')->default('{}');
-            $table->jsonb('field_attempts')->default('{}');
+            $table->json('context')->nullable();
+            $table->json('field_attempts')->nullable();
             $table->unsignedSmallInteger('invalid_attempts')->default(0);
             $table->unsignedInteger('lock_version')->default(0);
             $table->text('terms_url')->nullable();
             $table->string('terms_version', 80)->nullable();
             $table->string('terms_role', 20)->nullable();
             $table->string('terms_accepted_message_id', 160)->nullable();
-            $table->jsonb('terms_metadata')->default('{}');
-            $table->timestampTz('terms_accepted_at')->nullable();
-            $table->timestampTz('otp_verified_at')->nullable();
-            $table->timestampTz('completed_at')->nullable();
-            $table->timestampTz('last_message_at')->nullable();
-            $table->timestampsTz();
+            $table->json('terms_metadata')->nullable();
+            $table->timestamp('terms_accepted_at')->nullable();
+            $table->timestamp('otp_verified_at')->nullable();
+            $table->timestamp('completed_at')->nullable();
+            $table->timestamp('last_message_at')->nullable();
+            $table->timestamps();
 
             $table->index('wa_phone');
             $table->index('status');

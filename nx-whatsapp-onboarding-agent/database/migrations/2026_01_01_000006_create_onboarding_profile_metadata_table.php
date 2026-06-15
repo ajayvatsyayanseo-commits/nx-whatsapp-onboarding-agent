@@ -17,9 +17,9 @@ return new class extends Migration {
             $table->string('role', 20);
             $table->boolean('force_password_reset')->default(true);
             $table->boolean('dry_run')->default(false);
-            $table->jsonb('metadata')->default('{}');
-            $table->timestampTz('sensitive_purged_at')->nullable();
-            $table->timestampsTz();
+            $table->json('metadata')->nullable();
+            $table->timestamp('sensitive_purged_at')->nullable();
+            $table->timestamps();
 
             $table->index('register_user_id');
             $table->index(['register_phone_hash', 'role'], 'onboarding_profile_metadata_phone_role_idx');

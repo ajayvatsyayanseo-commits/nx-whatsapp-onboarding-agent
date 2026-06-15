@@ -40,10 +40,11 @@ final class TutorProfileCreationTest extends TestCase
             proDesc: 'Professional profile',
         ), 'hashed-password');
 
-        self::assertSame('tutor', $attributes['user_type']);
+        self::assertSame('Individual', $attributes['user_type']);
         self::assertSame('nxtutors/onboarding/front.jpg', $attributes['frount_image']);
         self::assertSame('nxtutors/onboarding/back.jpg', $attributes['back_image']);
         self::assertSame('nxtutors/onboarding/degree.pdf', $attributes['degree']);
-        self::assertSame('pending_review', $attributes['status']);
+        self::assertSame('t', $attributes['status']);
+        self::assertSame('teacher', $attributes['join_as']);
     }
 }

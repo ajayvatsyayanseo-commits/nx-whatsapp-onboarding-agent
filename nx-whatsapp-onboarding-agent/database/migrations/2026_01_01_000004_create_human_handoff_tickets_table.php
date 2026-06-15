@@ -18,9 +18,9 @@ return new class extends Migration {
             $table->string('reason_code', 64)->nullable();
             $table->string('status', 32)->default('open');
             $table->string('assigned_to')->nullable();
-            $table->timestampTz('opened_at')->useCurrent();
-            $table->timestampTz('closed_at')->nullable();
-            $table->timestampsTz();
+            $table->timestamp('opened_at')->useCurrent();
+            $table->timestamp('closed_at')->nullable();
+            $table->timestamps();
 
             $table->index(['status', 'opened_at'], 'human_handoff_status_opened_idx');
         });

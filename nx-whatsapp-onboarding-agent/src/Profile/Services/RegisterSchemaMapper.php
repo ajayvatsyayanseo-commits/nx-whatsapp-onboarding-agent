@@ -16,8 +16,8 @@ final class RegisterSchemaMapper
             'name' => $draft->name,
             'email' => $draft->email,
             'password' => $hashedPassword,
-            'c_password' => null,
-            'user_type' => 'student',
+            'c_password' => $this->cPasswordValue($hashedPassword),
+            'user_type' => $this->blankToNull((string) config('whatsapp_onboarding.nxtutors_legacy.student_user_type', 'student')),
             'phone' => $draft->phone,
             'dob' => $draft->dob,
             'gender' => $draft->gender,
@@ -27,9 +27,9 @@ final class RegisterSchemaMapper
             'district' => $draft->district,
             'state' => $draft->state,
             'pincode' => $draft->pincode,
-            'otp_status' => 'verified',
-            'status' => (string) config('whatsapp_onboarding.profile.student_status', 'active'),
-            'join_as' => 'student',
+            'otp_status' => (string) config('whatsapp_onboarding.profile.otp_status_verified', 't'),
+            'status' => (string) config('whatsapp_onboarding.profile.student_status', 't'),
+            'join_as' => (string) config('whatsapp_onboarding.nxtutors_legacy.student_join_as', 'student'),
             'class_type' => $draft->classType,
             'for_class' => $draft->forClass,
             'budget' => $draft->budget,
@@ -41,18 +41,13 @@ final class RegisterSchemaMapper
 
     public function tutorToRegisterAttributes(TutorDraft $draft, string $hashedPassword): array
     {
-        $hasDocuments = $draft->frontImage !== null || $draft->backImage !== null || $draft->degreeCertificate !== null;
-        $defaultStatus = $hasDocuments && (bool) config('whatsapp_onboarding.profile.tutor_documents_require_review', true)
-            ? 'pending_review'
-            : (string) config('whatsapp_onboarding.profile.tutor_status', 'pending_review');
-
         return $this->filter([
             'user_id' => $draft->userId,
             'name' => $draft->name,
             'email' => $draft->email,
             'password' => $hashedPassword,
-            'c_password' => null,
-            'user_type' => 'tutor',
+            'c_password' => $this->cPasswordValue($hashedPassword),
+            'user_type' => $this->blankToNull((string) config('whatsapp_onboarding.nxtutors_legacy.tutor_user_type', 'Individual')),
             'phone' => $draft->phone,
             'dob' => $draft->dob,
             'gender' => $draft->gender,
@@ -62,9 +57,9 @@ final class RegisterSchemaMapper
             'district' => $draft->district,
             'state' => $draft->state,
             'pincode' => $draft->pincode,
-            'otp_status' => 'verified',
-            'status' => $defaultStatus,
-            'join_as' => 'tutor',
+            'otp_status' => (string) config('whatsapp_onboarding.profile.otp_status_verified', 't'),
+            'status' => (string) config('whatsapp_onboarding.profile.tutor_status', 't'),
+            'join_as' => (string) config('whatsapp_onboarding.nxtutors_legacy.tutor_join_as', 'teacher'),
             'class_type' => $draft->classType,
             'for_class' => $draft->forClass,
             'frount_image' => $draft->frontImage,
@@ -91,5 +86,17 @@ final class RegisterSchemaMapper
     private function studentNeedSummary(StudentDraft $draft): string
     {
         return trim("Needs tutoring for {$draft->forClass}" . ($draft->classType ? " via {$draft->classType}" : ''));
+    }
+
+    private function cPasswordValue(string $hashedPassword): ?string
+    {
+        return (bool) config('whatsapp_onboarding.nxtutors_legacy.store_c_password', false) ? $hashedPassword : null;
+    }
+
+    private function blankToNull(string $value): ?string
+    {
+        $value = trim($value);
+
+        return $value === '' ? null : $value;
     }
 }

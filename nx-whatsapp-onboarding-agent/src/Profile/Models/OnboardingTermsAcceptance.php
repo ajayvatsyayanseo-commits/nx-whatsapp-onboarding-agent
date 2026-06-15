@@ -14,6 +14,7 @@ final class OnboardingTermsAcceptance extends Model
         'onboarding_conversation_id',
         'role',
         'terms_url',
+        'privacy_url',
         'terms_version',
         'accepted_at',
         'acceptance_message_id',

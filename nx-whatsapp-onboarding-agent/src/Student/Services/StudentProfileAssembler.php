@@ -6,11 +6,15 @@ namespace NxTutors\WhatsAppOnboarding\Student\Services;
 
 use NxTutors\WhatsAppOnboarding\Profile\Models\OnboardingConversation;
 use NxTutors\WhatsAppOnboarding\Profile\Services\UserIdGenerator;
+use NxTutors\WhatsAppOnboarding\Common\Support\PhoneNormalizer;
 use NxTutors\WhatsAppOnboarding\Student\DTO\StudentDraft;
 
 final readonly class StudentProfileAssembler
 {
-    public function __construct(private UserIdGenerator $userIdGenerator)
+    public function __construct(
+        private UserIdGenerator $userIdGenerator,
+        private PhoneNormalizer $phones,
+    )
     {
     }
 
@@ -22,7 +26,7 @@ final readonly class StudentProfileAssembler
             userId: (string) ($context['user_id'] ?? $this->userIdGenerator->generate('student')),
             name: (string) $context['name'],
             email: (string) $context['email'],
-            phone: (string) ($context['phone'] ?? $conversation->wa_phone),
+            phone: $this->phones->forStorage((string) ($context['phone'] ?? $conversation->wa_phone)),
             dob: $this->nullable($context['dob'] ?? null),
             gender: $this->nullable($context['gender'] ?? null),
             classType: $this->nullable($context['class_type'] ?? null),

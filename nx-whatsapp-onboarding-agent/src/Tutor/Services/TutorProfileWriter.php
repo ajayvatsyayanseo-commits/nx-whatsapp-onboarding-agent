@@ -34,6 +34,9 @@ final readonly class TutorProfileWriter
         $attributes = $this->mapper->tutorToRegisterAttributes($draft, $credential['password_hash']);
         $dryRun = ! (bool) config('whatsapp_onboarding.profile.create_real_profile', true);
         $register = $dryRun ? $this->dryRunRegister($attributes) : $this->repository->createProfile($attributes);
+        $conversation->forceFill(['context' => array_merge($conversation->context ?? [], [
+            'user_id' => (string) $register->user_id,
+        ])])->save();
         $this->metadata->record($conversation, (string) $register->user_id, $dryRun, ['created_via' => 'whatsapp_tutor', 'status' => $register->status]);
         $this->metadata->purgeSensitiveDraft($conversation);
 

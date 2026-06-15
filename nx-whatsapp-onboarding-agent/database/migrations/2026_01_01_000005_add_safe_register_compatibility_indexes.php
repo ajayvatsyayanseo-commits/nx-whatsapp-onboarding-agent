@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        if (! Schema::hasTable('register')) {
+        if (! Schema::hasTable('register') || ! (bool) env('NXTUTORS_ADD_REGISTER_COMPAT_COLUMNS', false)) {
             return;
         }
 
@@ -20,7 +20,7 @@ return new class extends Migration {
             });
         }
 
-        if (DB::getDriverName() !== 'pgsql') {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
             return;
         }
 
@@ -43,14 +43,14 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (DB::getDriverName() === 'pgsql') {
+        if (DB::connection()->getDriverName() === 'pgsql') {
             DB::statement('DROP INDEX IF EXISTS register_phone_unique_idx');
             DB::statement('DROP INDEX IF EXISTS register_user_id_unique_not_null_idx');
             DB::statement('DROP INDEX IF EXISTS register_email_unique_not_null_idx');
             DB::statement('DROP INDEX IF EXISTS register_document_number_unique_not_null_idx');
         }
 
-        if (Schema::hasTable('register') && Schema::hasColumn('register', 'force_password_reset')) {
+        if ((bool) env('NXTUTORS_ADD_REGISTER_COMPAT_COLUMNS', false) && Schema::hasTable('register') && Schema::hasColumn('register', 'force_password_reset')) {
             Schema::table('register', static function (Blueprint $table): void {
                 $table->dropColumn('force_password_reset');
             });
