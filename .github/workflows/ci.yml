@@ -35,10 +35,95 @@ jobs:
           working-directory: nx-whatsapp-onboarding-agent
 
       - name: Generate test env only
+        env:
+          APP_KEY: ${{ secrets.APP_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          REDIS_HOST: ${{ secrets.REDIS_HOST }}
+          REDIS_PORT: ${{ secrets.REDIS_PORT }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          META_WHATSAPP_VERIFY_TOKEN: ${{ secrets.META_WHATSAPP_VERIFY_TOKEN }}
+          META_WHATSAPP_APP_SECRET: ${{ secrets.META_WHATSAPP_APP_SECRET }}
+          META_WHATSAPP_ACCESS_TOKEN: ${{ secrets.META_WHATSAPP_ACCESS_TOKEN }}
+          META_WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.META_WHATSAPP_PHONE_NUMBER_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LLM_PROVIDER_API_KEY: ${{ secrets.LLM_PROVIDER_API_KEY }}
+          APP_URL: ${{ vars.APP_URL }}
+          DB_CONNECTION: ${{ vars.DB_CONNECTION }}
+          WHATSAPP_ONBOARDING_DB_CONNECTION: ${{ vars.WHATSAPP_ONBOARDING_DB_CONNECTION }}
+          QUEUE_CONNECTION: ${{ vars.QUEUE_CONNECTION }}
+          WHATSAPP_ONBOARDING_QUEUE: ${{ vars.WHATSAPP_ONBOARDING_QUEUE }}
+          TERMS_STUDENT_URL: ${{ vars.TERMS_STUDENT_URL }}
+          TERMS_TUTOR_URL: ${{ vars.TERMS_TUTOR_URL }}
+          PRIVACY_STUDENT_URL: ${{ vars.PRIVACY_STUDENT_URL }}
+          PRIVACY_TUTOR_URL: ${{ vars.PRIVACY_TUTOR_URL }}
+          STUDENT_DASHBOARD_URL: ${{ vars.STUDENT_DASHBOARD_URL }}
+          TUTOR_DASHBOARD_URL: ${{ vars.TUTOR_DASHBOARD_URL }}
+          WHATSAPP_ONBOARDING_LOGIN_URL: ${{ vars.WHATSAPP_ONBOARDING_LOGIN_URL }}
+          NXTUTORS_LOGIN_IDENTIFIER: ${{ vars.NXTUTORS_LOGIN_IDENTIFIER }}
+          MEDIA_STORAGE_DRIVER: ${{ vars.MEDIA_STORAGE_DRIVER }}
+          AGENT_MODE: ${{ vars.AGENT_MODE }}
         run: |
-          cp .env.local.example .env.testing
-          sed -i 's/^APP_ENV=.*/APP_ENV=testing/' .env.testing
-          sed -i 's/^WHATSAPP_CREATE_REAL_PROFILE=.*/WHATSAPP_CREATE_REAL_PROFILE=false/' .env.testing
+          : > .env.testing
+          add_env() { printf '%s=%s\n' "$1" "$2" >> .env.testing; }
+
+          add_env APP_NAME '"NXtutors WhatsApp Onboarding Agent"'
+          add_env APP_ENV testing
+          add_env APP_DEBUG true
+          add_env APP_URL "${APP_URL:-http://localhost}"
+          add_env APP_KEY "${APP_KEY:-base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}"
+
+          add_env DB_CONNECTION "${DB_CONNECTION:-sqlite}"
+          add_env DB_HOST "${DB_HOST:-127.0.0.1}"
+          add_env DB_PORT "${DB_PORT:-3306}"
+          add_env DB_DATABASE "${DB_DATABASE:-:memory:}"
+          add_env DB_USERNAME "${DB_USERNAME:-}"
+          add_env DB_PASSWORD "${DB_PASSWORD:-}"
+          add_env WHATSAPP_ONBOARDING_DB_CONNECTION "${WHATSAPP_ONBOARDING_DB_CONNECTION:-sqlite}"
+
+          add_env REDIS_HOST "${REDIS_HOST:-127.0.0.1}"
+          add_env REDIS_PORT "${REDIS_PORT:-6379}"
+          add_env REDIS_PASSWORD "${REDIS_PASSWORD:-}"
+          add_env QUEUE_CONNECTION "${QUEUE_CONNECTION:-sync}"
+          add_env WHATSAPP_ONBOARDING_QUEUE "${WHATSAPP_ONBOARDING_QUEUE:-whatsapp-onboarding}"
+
+          add_env WHATSAPP_SIGNUP_ENABLED true
+          add_env WHATSAPP_STUDENT_SIGNUP_ENABLED true
+          add_env WHATSAPP_TUTOR_SIGNUP_ENABLED true
+          add_env WHATSAPP_CREATE_REAL_PROFILE false
+          add_env WHATSAPP_ONBOARDING_PAUSED false
+          add_env WHATSAPP_OUTBOUND_PAUSED true
+
+          add_env META_WHATSAPP_VERIFY_TOKEN "${META_WHATSAPP_VERIFY_TOKEN:-test-verify-token}"
+          add_env META_WHATSAPP_APP_SECRET "${META_WHATSAPP_APP_SECRET:-test-app-secret}"
+          add_env META_WHATSAPP_ACCESS_TOKEN "${META_WHATSAPP_ACCESS_TOKEN:-test-access-token}"
+          add_env META_WHATSAPP_PHONE_NUMBER_ID "${META_WHATSAPP_PHONE_NUMBER_ID:-test-phone-number-id}"
+
+          add_env TERMS_STUDENT_URL "${TERMS_STUDENT_URL:-https://www.nxtutors.com/terms-conditions}"
+          add_env TERMS_TUTOR_URL "${TERMS_TUTOR_URL:-https://www.nxtutors.com/terms-conditions}"
+          add_env PRIVACY_STUDENT_URL "${PRIVACY_STUDENT_URL:-https://www.nxtutors.com/privacy-policy}"
+          add_env PRIVACY_TUTOR_URL "${PRIVACY_TUTOR_URL:-https://www.nxtutors.com/privacy-policy}"
+          add_env TERMS_VERSION ci-test
+
+          add_env STUDENT_DASHBOARD_URL "${STUDENT_DASHBOARD_URL:-https://www.nxtutors.com/user/dashboard}"
+          add_env TUTOR_DASHBOARD_URL "${TUTOR_DASHBOARD_URL:-https://www.nxtutors.com/teacher/dashboard}"
+          add_env WHATSAPP_ONBOARDING_LOGIN_URL "${WHATSAPP_ONBOARDING_LOGIN_URL:-https://www.nxtutors.com/login}"
+          add_env NXTUTORS_LOGIN_IDENTIFIER "${NXTUTORS_LOGIN_IDENTIFIER:-email}"
+          add_env DASHBOARD_MAGIC_LOGIN_ENABLED false
+
+          add_env MEDIA_STORAGE_DRIVER "${MEDIA_STORAGE_DRIVER:-legacy_public_user}"
+          add_env WHATSAPP_ONBOARDING_LOCAL_MEDIA_PATH storage/user
+          add_env WHATSAPP_ONBOARDING_MEDIA_DB_VALUE filename_only
+
+          add_env WHATSAPP_ONBOARDING_LLM_ENABLED false
+          add_env AGENT_MODE "${AGENT_MODE:-gpt-4o-mini}"
+          add_env OPENAI_API_KEY "${OPENAI_API_KEY:-}"
+          add_env LLM_PROVIDER_API_KEY "${LLM_PROVIDER_API_KEY:-}"
+
+          # Do not print .env.testing; it may contain masked GitHub secrets.
 
       - name: Composer validate
         run: composer validate --strict
