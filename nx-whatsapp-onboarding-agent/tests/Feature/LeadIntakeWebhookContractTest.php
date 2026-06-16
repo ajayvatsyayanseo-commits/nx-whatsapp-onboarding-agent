@@ -11,14 +11,14 @@ final class LeadIntakeWebhookContractTest extends TestCase
     /** @var resource|null */
     private $serverProcess = null;
 
-    protected string $baseUrl;
+    private string $webhookBaseUrl;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $port = random_int(20000, 45000);
-        $this->baseUrl = "http://127.0.0.1:{$port}";
+        $this->webhookBaseUrl = "http://127.0.0.1:{$port}";
         $publicPath = dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'public';
         $secret = 'test-internal-secret';
 
@@ -158,7 +158,7 @@ final class LeadIntakeWebhookContractTest extends TestCase
             ],
         ]);
 
-        $response = file_get_contents($this->baseUrl . $path, false, $context);
+        $response = file_get_contents($this->webhookBaseUrl . $path, false, $context);
         $statusLine = $http_response_header[0] ?? '';
         preg_match('/\s(\d{3})\s/', $statusLine, $matches);
         $status = isset($matches[1]) ? (int) $matches[1] : 0;
