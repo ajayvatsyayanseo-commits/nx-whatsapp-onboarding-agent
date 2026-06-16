@@ -58,57 +58,43 @@ function is_signup_intent(string $text): bool
     return false;
 }
 
-function role_selection_message(): string
+function requested_signup_role(string $text): string
 {
-    return "Welcome to NXtutors. Please choose signup type:\n1. As a Student\n2. As a Tutor";
-}
+    $text = normalized_text($text);
 
-function send_whatsapp_text(string $phone, string $message): array
-{
-    $token = getenv('META_WHATSAPP_ACCESS_TOKEN') ?: '';
-    $phoneNumberId = getenv('META_WHATSAPP_PHONE_NUMBER_ID') ?: '';
-    $apiVersion = getenv('META_WHATSAPP_API_VERSION') ?: 'v20.0';
-    $graphBaseUrl = rtrim(getenv('META_GRAPH_BASE_URL') ?: 'https://graph.facebook.com', '/');
-    $recipient = preg_replace('/\D+/', '', $phone) ?: '';
-
-    if ($token === '' || $phoneNumberId === '' || $recipient === '') {
-        return ['sent' => false, 'reason' => 'missing_meta_config_or_phone'];
+    if (str_contains($text, 'tutor') || str_contains($text, 'teacher')) {
+        return 'tutor';
     }
 
-    $payload = json_encode([
-        'messaging_product' => 'whatsapp',
-        'to' => $recipient,
-        'type' => 'text',
-        'text' => [
-            'preview_url' => false,
-            'body' => $message,
-        ],
-    ], JSON_UNESCAPED_SLASHES);
+    if (str_contains($text, 'student')) {
+        return 'student';
+    }
 
-    $context = stream_context_create([
-        'http' => [
-            'method' => 'POST',
-            'header' => [
-                'Authorization: Bearer ' . $token,
-                'Content-Type: application/json',
-            ],
-            'content' => $payload,
-            'ignore_errors' => true,
-            'timeout' => 8,
-        ],
-    ]);
+    return '';
+}
 
-    $url = sprintf('%s/%s/%s/messages', $graphBaseUrl, $apiVersion, rawurlencode($phoneNumberId));
-    $response = @file_get_contents($url, false, $context);
-    $statusLine = $http_response_header[0] ?? '';
-    preg_match('/\s(\d{3})\s/', $statusLine, $matches);
-    $status = isset($matches[1]) ? (int) $matches[1] : 0;
+function role_selection_message(): string
+{
+    return "Welcome to NXtutors signup. Please choose one:\n1. Student signup\n2. Tutor signup";
+}
 
-    return [
-        'sent' => $status >= 200 && $status < 300,
-        'provider_status' => $status,
-        'provider_response' => $status >= 200 && $status < 300 ? 'accepted' : substr((string) $response, 0, 300),
-    ];
+function student_start_message(): string
+{
+    return "Great, let's create your student profile. What is your full name?";
+}
+
+function tutor_start_message(): string
+{
+    return "Great, let's create your tutor profile. What is your full name?";
+}
+
+function onboarding_reply_text(string $text): string
+{
+    return match (requested_signup_role($text)) {
+        'student' => student_start_message(),
+        'tutor' => tutor_start_message(),
+        default => role_selection_message(),
+    };
 }
 
 if ($path === '/' || $path === '/health/live' || $path === '/health/Live') {
@@ -150,18 +136,14 @@ if ($path === '/whatsapp/onboarding/webhook' && $method === 'POST') {
 
         $messageText = (string) ($payload['message_text'] ?? $payload['text'] ?? '');
         if (! is_signup_intent($messageText)) {
-            json_response(['status' => 'ignored', 'reason' => 'not_signup_intent']);
+            json_response(['status' => 'ignored', 'reason' => 'not_signup_intent'], 202);
         }
 
-        $reply = role_selection_message();
-        $sendResult = send_whatsapp_text((string) ($payload['wa_phone'] ?? $payload['phone'] ?? ''), $reply);
-
         json_response([
-            'status' => 'accepted',
+            'status' => 'ok',
             'mode' => 'lead_intake_handoff',
-            'reply_text' => $reply,
-            'send_result' => $sendResult,
-        ], 202);
+            'reply_text' => onboarding_reply_text($messageText),
+        ]);
     }
 
     json_response(['status' => 'accepted', 'mode' => 'package']);
