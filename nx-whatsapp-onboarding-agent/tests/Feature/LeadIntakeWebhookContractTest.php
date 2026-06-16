@@ -76,9 +76,9 @@ final class LeadIntakeWebhookContractTest extends TestCase
 
         self::assertLessThan(2.0, microtime(true) - $startedAt);
         self::assertContains($status, [200, 202]);
-        self::assertSame('ok', $body['status']);
+        self::assertSame('accepted', $body['status']);
         self::assertSame(
-            "Welcome to NXtutors signup. Please choose one:\n1. Student signup\n2. Tutor signup",
+            'Welcome to NXtutors signup. Are you joining as a student or tutor?',
             $body['reply_text']
         );
     }
@@ -123,9 +123,36 @@ final class LeadIntakeWebhookContractTest extends TestCase
         ], '/index.php');
 
         self::assertContains($status, [200, 202]);
-        self::assertSame('ok', $body['status']);
+        self::assertSame('accepted', $body['status']);
         self::assertSame(
-            "Welcome to NXtutors signup. Please choose one:\n1. Student signup\n2. Tutor signup",
+            'Welcome to NXtutors signup. Are you joining as a student or tutor?',
+            $body['reply_text']
+        );
+    }
+
+    public function testOriginalMetaPayloadCanBeForwardedByLeadIntake(): void
+    {
+        [$status, $body] = $this->postWebhook('test-internal-secret', [
+            'source' => 'lead_intake_agent',
+            'entry' => [[
+                'changes' => [[
+                    'value' => [
+                        'messages' => [[
+                            'id' => 'wamid.forwarded',
+                            'from' => '919999999999',
+                            'timestamp' => (string) time(),
+                            'type' => 'text',
+                            'text' => ['body' => 'signup'],
+                        ]],
+                    ],
+                ]],
+            ]],
+        ]);
+
+        self::assertContains($status, [200, 202]);
+        self::assertSame('accepted', $body['status']);
+        self::assertSame(
+            'Welcome to NXtutors signup. Are you joining as a student or tutor?',
             $body['reply_text']
         );
     }

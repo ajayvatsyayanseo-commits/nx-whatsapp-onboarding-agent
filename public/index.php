@@ -75,7 +75,7 @@ function requested_signup_role(string $text): string
 
 function role_selection_message(): string
 {
-    return "Welcome to NXtutors signup. Please choose one:\n1. Student signup\n2. Tutor signup";
+    return 'Welcome to NXtutors signup. Are you joining as a student or tutor?';
 }
 
 function student_start_message(): string
@@ -95,6 +95,54 @@ function onboarding_reply_text(string $text): string
         'tutor' => tutor_start_message(),
         default => role_selection_message(),
     };
+}
+
+function flat_or_meta_value(array $payload, string $flatKey, string $metaKey): string
+{
+    $flatValue = $payload[$flatKey] ?? null;
+    if (is_scalar($flatValue) && (string) $flatValue !== '') {
+        return (string) $flatValue;
+    }
+
+    $message = $payload['entry'][0]['changes'][0]['value']['messages'][0] ?? null;
+    if (! is_array($message)) {
+        return '';
+    }
+
+    return match ($metaKey) {
+        'message_id' => (string) ($message['id'] ?? ''),
+        'phone' => (string) ($message['from'] ?? ''),
+        'text' => (string) (
+            $message['text']['body']
+            ?? $message['button']['text']
+            ?? $message['interactive']['button_reply']['title']
+            ?? $message['interactive']['list_reply']['title']
+            ?? ''
+        ),
+        default => '',
+    };
+}
+
+function mask_phone(string $phone): string
+{
+    $digits = preg_replace('/\D+/', '', $phone) ?? '';
+    if (strlen($digits) <= 4) {
+        return $digits === '' ? '' : '****';
+    }
+
+    return '+' . substr($digits, 0, 2) . str_repeat('*', max(2, strlen($digits) - 6)) . substr($digits, -4);
+}
+
+function masked_request_log(string $event, array $context): void
+{
+    $safe = [
+        'event' => $event,
+        'request_id' => request_header('X-Request-Id') ?: bin2hex(random_bytes(8)),
+        'wa_message_id' => (string) ($context['wa_message_id'] ?? ''),
+        'wa_phone' => mask_phone((string) ($context['wa_phone'] ?? '')),
+    ];
+
+    error_log(json_encode($safe, JSON_UNESCAPED_SLASHES));
 }
 
 if ($path === '/' || $path === '/health/live' || $path === '/health/Live') {
@@ -126,24 +174,36 @@ if (($path === '/whatsapp/onboarding/webhook' || $path === '/index.php') && $met
     $payload = json_decode($body, true);
     $payload = is_array($payload) ? $payload : [];
 
-    if (($payload['source'] ?? '') === 'lead_intake_agent') {
-        $configuredSecret = getenv('ONBOARDING_AGENT_INTERNAL_SECRET') ?: '';
-        $providedSecret = request_header('X-NXTUTORS-INTERNAL-SECRET');
+    $providedInternalSecret = request_header('X-NXTUTORS-INTERNAL-SECRET');
+    $isInternalHandoff = $providedInternalSecret !== '' || ($payload['source'] ?? '') === 'lead_intake_agent';
 
-        if ($configuredSecret === '' || ! hash_equals($configuredSecret, $providedSecret)) {
+    if ($isInternalHandoff) {
+        $configuredSecret = getenv('ONBOARDING_AGENT_INTERNAL_SECRET') ?: '';
+        if ($configuredSecret === '' || ! hash_equals($configuredSecret, $providedInternalSecret)) {
             json_response(['error' => 'invalid internal secret'], 401);
         }
 
-        $messageText = (string) ($payload['message_text'] ?? $payload['text'] ?? '');
+        $messageText = flat_or_meta_value($payload, 'message_text', 'text');
+        if ($messageText === '') {
+            $messageText = flat_or_meta_value($payload, 'text', 'text');
+        }
+        $waPhone = flat_or_meta_value($payload, 'wa_phone', 'phone');
+        $messageId = flat_or_meta_value($payload, 'wa_message_id', 'message_id');
+
+        masked_request_log('lead_intake_handoff_received', [
+            'wa_phone' => $waPhone,
+            'wa_message_id' => $messageId,
+        ]);
+
         if (! is_signup_intent($messageText)) {
             json_response(['status' => 'ignored', 'reason' => 'not_signup_intent'], 202);
         }
 
         json_response([
-            'status' => 'ok',
+            'status' => 'accepted',
             'mode' => 'lead_intake_handoff',
             'reply_text' => onboarding_reply_text($messageText),
-        ]);
+        ], 202);
     }
 
     json_response(['status' => 'accepted', 'mode' => 'package']);
