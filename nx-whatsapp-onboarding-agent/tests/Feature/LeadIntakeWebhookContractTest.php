@@ -28,9 +28,13 @@ final class LeadIntakeWebhookContractTest extends TestCase
             2 => ['pipe', 'w'],
         ];
 
-        $env = array_merge($_ENV, $_SERVER, [
-            'ONBOARDING_AGENT_INTERNAL_SECRET' => $secret,
-        ]);
+        $env = [];
+        foreach (array_merge($_ENV, $_SERVER) as $key => $value) {
+            if (is_scalar($value)) {
+                $env[(string) $key] = (string) $value;
+            }
+        }
+        $env['ONBOARDING_AGENT_INTERNAL_SECRET'] = $secret;
 
         $this->serverProcess = proc_open(
             sprintf('php -S 127.0.0.1:%d -t %s', $port, escapeshellarg($publicPath)),
