@@ -121,7 +121,7 @@ if ($path === '/whatsapp/onboarding/webhook' && $method === 'GET') {
     json_response(['error' => 'webhook verification failed'], 403);
 }
 
-if ($path === '/whatsapp/onboarding/webhook' && $method === 'POST') {
+if (($path === '/whatsapp/onboarding/webhook' || $path === '/index.php') && $method === 'POST') {
     $body = file_get_contents('php://input') ?: '{}';
     $payload = json_decode($body, true);
     $payload = is_array($payload) ? $payload : [];

@@ -11,7 +11,7 @@ final class LeadIntakeWebhookContractTest extends TestCase
     /** @var resource|null */
     private $serverProcess = null;
 
-    private string $baseUrl;
+    protected string $baseUrl;
 
     protected function setUp(): void
     {
@@ -112,11 +112,26 @@ final class LeadIntakeWebhookContractTest extends TestCase
         self::assertSame("Great, let's create your tutor profile. What is your full name?", $tutorBody['reply_text']);
     }
 
+    public function testIndexPhpAliasReturnsReplyTextForLegacyForwarders(): void
+    {
+        [$status, $body] = $this->postWebhook('test-internal-secret', [
+            'message_text' => 'signup',
+        ], '/index.php');
+
+        self::assertContains($status, [200, 202]);
+        self::assertSame('ok', $body['status']);
+        self::assertSame(
+            "Welcome to NXtutors signup. Please choose one:\n1. Student signup\n2. Tutor signup",
+            $body['reply_text']
+        );
+    }
+
+
     /**
      * @param array<string, mixed> $overrides
      * @return array{0:int,1:array<string,mixed>}
      */
-    private function postWebhook(string $secret, array $overrides = []): array
+    private function postWebhook(string $secret, array $overrides = [], string $path = '/whatsapp/onboarding/webhook'): array
     {
         $payload = array_merge([
             'source' => 'lead_intake_agent',
@@ -143,7 +158,7 @@ final class LeadIntakeWebhookContractTest extends TestCase
             ],
         ]);
 
-        $response = file_get_contents($this->baseUrl . '/whatsapp/onboarding/webhook', false, $context);
+        $response = file_get_contents($this->baseUrl . $path, false, $context);
         $statusLine = $http_response_header[0] ?? '';
         preg_match('/\s(\d{3})\s/', $statusLine, $matches);
         $status = isset($matches[1]) ? (int) $matches[1] : 0;
