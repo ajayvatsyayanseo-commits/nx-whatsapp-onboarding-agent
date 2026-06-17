@@ -1,0 +1,73 @@
+name: Deploy Onboarding Agent (CloudPanel)
+
+# Auto-deploys the standalone WhatsApp onboarding agent (public/index.php) to the
+# CloudPanel server over SSH. The agent is plain PHP (no composer/build), so this
+# is a straight rsync of the repo into the site directory.
+#
+# The server `.env` is NEVER touched (it is excluded), so your DB_HOST=127.0.0.1
+# config and secrets on the server are preserved across deploys.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/**'
+      - 'nx-whatsapp-onboarding-agent/**'
+      - '.github/workflows/deploy-cloudpanel.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-cloudpanel
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to CloudPanel
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SSH_HOST: ${{ vars.CLOUDPANEL_SSH_HOST }}
+      SSH_USER: ${{ vars.CLOUDPANEL_SSH_USER }}
+      SSH_PORT: ${{ vars.CLOUDPANEL_SSH_PORT || '22' }}
+      DEPLOY_PATH: ${{ vars.CLOUDPANEL_DEPLOY_PATH }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.CLOUDPANEL_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Verify SSH connection and deploy path is writable
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=accept-new \
+            "$SSH_USER@$SSH_HOST" \
+            "mkdir -p '$DEPLOY_PATH' && test -w '$DEPLOY_PATH' && echo 'deploy path OK: '$DEPLOY_PATH"
+
+      - name: Deploy via rsync
+        run: |
+          rsync -azv --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.env' \
+            --exclude='tests' \
+            --exclude='docker' \
+            --exclude='infra' \
+            -e "ssh -i ~/.ssh/deploy_key -p $SSH_PORT -o StrictHostKeyChecking=accept-new" \
+            ./ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+
+      - name: Post-deploy DB self-test (no insert)
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=accept-new \
+            "$SSH_USER@$SSH_HOST" \
+            "cd '$DEPLOY_PATH' && php nx-whatsapp-onboarding-agent/scripts/whatsapp_db_check.php || true"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## CloudPanel deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Host: $SSH_HOST" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Path: $DEPLOY_PATH" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Docroot must be set to: $DEPLOY_PATH/public" >> "$GITHUB_STEP_SUMMARY"
