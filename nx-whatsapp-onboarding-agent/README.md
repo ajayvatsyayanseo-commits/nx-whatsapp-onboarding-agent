@@ -1,6 +1,6 @@
 # NXtutors WhatsApp Onboarding Agent
 
-Laravel package/module for deterministic WhatsApp student and tutor signup.
+Laravel package/module for deterministic WhatsApp student and tutor Signup Onbording Agent
 
 License: proprietary. See [LICENSE](LICENSE).
 
