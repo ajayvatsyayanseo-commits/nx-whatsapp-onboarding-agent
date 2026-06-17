@@ -78,10 +78,15 @@ jobs:
 
       - name: Deploy via rsync
         run: |
-          sshpass -e rsync -azv --delete \
+          sshpass -e rsync -rzv --delete \
+            --no-perms \
+            --no-owner \
+            --no-group \
+            --omit-dir-times \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='.env' \
+            --exclude='.well-known' \
             --exclude='tests' \
             --exclude='docker' \
             --exclude='infra' \
