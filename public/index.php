@@ -32,6 +32,92 @@ declare(strict_types=1);
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
+/**
+ * Load a `.env` file into the process environment for this standalone runtime.
+ *
+ * `getenv()` only sees variables that were actually exported into the PHP-FPM /
+ * CLI process. On a single-server deployment (the live setup) the operator edits
+ * a `.env` file and expects it to take effect, so we read it here.
+ *
+ * Real environment variables ALWAYS win: a key already present in the process
+ * environment is never overwritten. This keeps platform-injected secrets
+ * (e.g. ONBOARDING_AGENT_INTERNAL_SECRET on ECS) authoritative while letting the
+ * `.env` file fill in anything the runtime did not set.
+ */
+function load_onboarding_env(): void
+{
+    $explicit = getenv('ONBOARDING_ENV_FILE');
+    $candidates = [];
+    if (is_string($explicit) && $explicit !== '') {
+        $candidates[] = $explicit;
+    }
+    // Search the common locations relative to public/index.php.
+    $candidates[] = __DIR__ . DIRECTORY_SEPARATOR . '.env';
+    $candidates[] = dirname(__DIR__) . DIRECTORY_SEPARATOR . '.env';
+    $candidates[] = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'nx-whatsapp-onboarding-agent' . DIRECTORY_SEPARATOR . '.env';
+
+    $file = '';
+    foreach ($candidates as $candidate) {
+        if (is_string($candidate) && $candidate !== '' && is_file($candidate)) {
+            $file = $candidate;
+            break;
+        }
+    }
+    if ($file === '') {
+        return;
+    }
+
+    $lines = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines === false) {
+        return;
+    }
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#') {
+            continue;
+        }
+        if (str_starts_with($line, 'export ')) {
+            $line = ltrim(substr($line, 7));
+        }
+
+        $eq = strpos($line, '=');
+        if ($eq === false) {
+            continue;
+        }
+
+        $key = trim(substr($line, 0, $eq));
+        if ($key === '' || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $key) !== 1) {
+            continue;
+        }
+
+        // Real environment wins — never override an already-exported variable.
+        if (getenv($key) !== false) {
+            continue;
+        }
+
+        $value = trim(substr($line, $eq + 1));
+        // Strip an inline trailing comment for unquoted values.
+        if ($value !== '' && $value[0] !== '"' && $value[0] !== "'") {
+            $hash = strpos($value, ' #');
+            if ($hash !== false) {
+                $value = rtrim(substr($value, 0, $hash));
+            }
+        }
+        // Strip matching surrounding quotes.
+        $len = strlen($value);
+        if ($len >= 2 && (($value[0] === '"' && $value[$len - 1] === '"') || ($value[0] === "'" && $value[$len - 1] === "'"))) {
+            $value = substr($value, 1, -1);
+        }
+
+        putenv($key . '=' . $value);
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+    }
+}
+
+load_onboarding_env();
+
 function json_response(array $payload, int $status = 200): never
 {
     http_response_code($status);
