@@ -1,11 +1,17 @@
 name: Deploy Onboarding Agent (CloudPanel)
 
 # Auto-deploys the standalone WhatsApp onboarding agent (public/index.php) to the
-# CloudPanel server over SSH. The agent is plain PHP (no composer/build), so this
-# is a straight rsync of the repo into the site directory.
+# CloudPanel server over SSH password auth. The agent is plain PHP (no
+# composer/build), so this is a straight rsync of the repo into the CloudPanel
+# site directory.
 #
-# The server `.env` is NEVER touched (it is excluded), so your DB_HOST=127.0.0.1
-# config and secrets on the server are preserved across deploys.
+# Required GitHub repository secrets:
+# - CLOUDPANEL_HOST
+# - CLOUDPANEL_SSH_USER
+# - CLOUDPANEL_SSH_PASSWORD
+#
+# The server `.env` is NEVER touched (it is excluded), so your DB config and
+# secrets on the server are preserved across deploys.
 
 on:
   push:
@@ -26,41 +32,65 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SSH_HOST: ${{ vars.CLOUDPANEL_SSH_HOST }}
-      SSH_USER: ${{ vars.CLOUDPANEL_SSH_USER }}
+      SSH_HOST: ${{ secrets.CLOUDPANEL_HOST }}
+      SSH_USER: ${{ secrets.CLOUDPANEL_SSH_USER }}
+      SSHPASS: ${{ secrets.CLOUDPANEL_SSH_PASSWORD }}
       SSH_PORT: ${{ vars.CLOUDPANEL_SSH_PORT || '22' }}
-      DEPLOY_PATH: ${{ vars.CLOUDPANEL_DEPLOY_PATH }}
+      CLOUDPANEL_DOMAIN: onboarding.nxtutors.com
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare SSH key
+      - name: Install SSH password tools
         run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends sshpass rsync
+
+      - name: Prepare SSH known hosts
+        run: |
+          test -n "$SSH_HOST" || { echo "Missing secret CLOUDPANEL_HOST"; exit 1; }
+          test -n "$SSH_USER" || { echo "Missing secret CLOUDPANEL_SSH_USER"; exit 1; }
+          test -n "$SSHPASS" || { echo "Missing secret CLOUDPANEL_SSH_PASSWORD"; exit 1; }
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.CLOUDPANEL_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Resolve CloudPanel deploy path
+        run: |
+          RESOLVED_PATH="$(sshpass -e ssh -p "$SSH_PORT" -o StrictHostKeyChecking=accept-new \
+            "$SSH_USER@$SSH_HOST" \
+            "set -eu
+             if [ -d \"\$HOME/htdocs/$CLOUDPANEL_DOMAIN\" ]; then
+               printf '%s' \"\$HOME/htdocs/$CLOUDPANEL_DOMAIN\"
+             elif [ -d \"\$HOME/htdocs\" ]; then
+               mkdir -p \"\$HOME/htdocs/$CLOUDPANEL_DOMAIN\"
+               printf '%s' \"\$HOME/htdocs/$CLOUDPANEL_DOMAIN\"
+             else
+               mkdir -p \"\$HOME/$CLOUDPANEL_DOMAIN\"
+               printf '%s' \"\$HOME/$CLOUDPANEL_DOMAIN\"
+             fi")"
+          echo "DEPLOY_PATH=$RESOLVED_PATH" >> "$GITHUB_ENV"
+          echo "Resolved deploy path: $RESOLVED_PATH"
 
       - name: Verify SSH connection and deploy path is writable
         run: |
-          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=accept-new \
+          sshpass -e ssh -p "$SSH_PORT" -o StrictHostKeyChecking=accept-new \
             "$SSH_USER@$SSH_HOST" \
-            "mkdir -p '$DEPLOY_PATH' && test -w '$DEPLOY_PATH' && echo 'deploy path OK: '$DEPLOY_PATH"
+            "mkdir -p '$DEPLOY_PATH/public' && test -w '$DEPLOY_PATH' && echo 'deploy path OK'"
 
       - name: Deploy via rsync
         run: |
-          rsync -azv --delete \
+          sshpass -e rsync -azv --delete \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='.env' \
             --exclude='tests' \
             --exclude='docker' \
             --exclude='infra' \
-            -e "ssh -i ~/.ssh/deploy_key -p $SSH_PORT -o StrictHostKeyChecking=accept-new" \
+            -e "ssh -p $SSH_PORT -o StrictHostKeyChecking=accept-new" \
             ./ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
 
       - name: Post-deploy DB self-test (no insert)
         run: |
-          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=accept-new \
+          sshpass -e ssh -p "$SSH_PORT" -o StrictHostKeyChecking=accept-new \
             "$SSH_USER@$SSH_HOST" \
             "cd '$DEPLOY_PATH' && php nx-whatsapp-onboarding-agent/scripts/whatsapp_db_check.php || true"
 
