@@ -131,6 +131,9 @@ jobs:
       - name: PHP lint
         run: find src config routes database tests -name '*.php' -print0 | xargs -0 -n1 php -l
 
+      - name: PHP lint public entrypoint
+        run: php -l ../public/index.php
+
       - name: Static analysis
         run: |
           if [ -x vendor/bin/phpstan ]; then

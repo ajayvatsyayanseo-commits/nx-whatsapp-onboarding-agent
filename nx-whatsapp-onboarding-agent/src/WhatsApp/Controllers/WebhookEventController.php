@@ -6,6 +6,7 @@ namespace NxTutors\WhatsAppOnboarding\WhatsApp\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use NxTutors\WhatsAppOnboarding\Contracts\PolicyGuardInterface;
 use NxTutors\WhatsAppOnboarding\Security\PiiMasking\PiiMasker;
@@ -30,7 +31,7 @@ final readonly class WebhookEventController
     {
         $rawBody = $request->getContent();
         if (strlen($rawBody) > (int) config('whatsapp_onboarding_security.webhook.max_body_bytes', 262144)) {
-            return response()->json(['ok' => false], 413);
+            return response()->json(['status' => 'error', 'reason' => 'payload_too_large'], 413);
         }
 
         $payload = $request->json()->all();
@@ -38,10 +39,10 @@ final readonly class WebhookEventController
             return $this->handleLeadIntakeHandoff($request, $payload);
         }
 
+        // Not an internal handoff → genuine Meta webhook. Require a valid signature.
         $signature = $request->headers->get((string) config('whatsapp_onboarding_security.webhook.signature_header'));
-
         if (! $this->signatureVerifier->verify($rawBody, $signature)) {
-            return response()->json(['ok' => false], 403);
+            return response()->json(['status' => 'forbidden', 'reason' => 'invalid_meta_signature'], 403);
         }
 
         $payload['_request_metadata'] = [
@@ -71,50 +72,119 @@ final readonly class WebhookEventController
     /** @param array<string, mixed> $payload */
     private function isLeadIntakeHandoff(Request $request, array $payload): bool
     {
-        return $request->headers->has('X-NXTUTORS-INTERNAL-SECRET')
-            || ($payload['source'] ?? null) === 'lead_intake_agent';
+        return $request->headers->has((string) config('whatsapp_onboarding.internal_handoff.header', 'X-NXTUTORS-INTERNAL-SECRET'))
+            || ($payload['source'] ?? null) === (string) config('whatsapp_onboarding.internal_handoff.source', 'lead_intake_agent');
     }
 
     /** @param array<string, mixed> $payload */
     private function handleLeadIntakeHandoff(Request $request, array $payload): JsonResponse
     {
-        $configuredSecret = (string) env('ONBOARDING_AGENT_INTERNAL_SECRET', '');
-        $providedSecret = (string) $request->headers->get('X-NXTUTORS-INTERNAL-SECRET', '');
+        $correlationId = (string) ($request->headers->get('X-Correlation-Id') ?: $request->headers->get('X-Request-Id') ?: bin2hex(random_bytes(8)));
 
-        if ($configuredSecret === '' || ! hash_equals($configuredSecret, $providedSecret)) {
-            return response()->json(['error' => 'invalid internal secret'], 401);
+        // Secrets are read from config (not env() at call time) so they survive
+        // `php artisan config:cache` in production.
+        $configuredSecret = (string) config('whatsapp_onboarding.internal_handoff.secret', '');
+        $providedSecret = (string) $request->headers->get(
+            (string) config('whatsapp_onboarding.internal_handoff.header', 'X-NXTUTORS-INTERNAL-SECRET'),
+            ''
+        );
+
+        // (Req 3) Server-side secret missing. Never silently accept a handoff.
+        if ($configuredSecret === '') {
+            Log::warning('lead_intake_handoff_misconfigured', [
+                'correlation_id' => $correlationId,
+                'mode' => 'lead_intake_handoff',
+                'internal_secret_valid' => false,
+                'reason' => 'server_secret_not_configured',
+            ]);
+
+            if (app()->environment('production')) {
+                return response()->json([
+                    'status' => 'error',
+                    'reason' => 'server_internal_secret_not_configured',
+                ], 503);
+            }
+
+            return response()->json(['status' => 'unauthorized', 'reason' => 'invalid_internal_secret'], 401);
+        }
+
+        // (Req 4) Wrong or missing client secret.
+        if ($providedSecret === '' || ! hash_equals($configuredSecret, $providedSecret)) {
+            Log::warning('lead_intake_handoff_unauthorized', [
+                'correlation_id' => $correlationId,
+                'mode' => 'lead_intake_handoff',
+                'internal_secret_valid' => false,
+            ]);
+
+            return response()->json(['status' => 'unauthorized', 'reason' => 'invalid_internal_secret'], 401);
         }
 
         $messageText = $this->extractText($payload);
-        $role = $this->requestedSignupRole($messageText);
+        $waPhone = $this->extractPhone($payload);
+        $waMessageId = $this->extractMessageId($payload);
+        $detectedRole = $this->detectRole($messageText);
 
-        Log::info('lead_intake_handoff_received', [
-            'request_id' => (string) $request->headers->get('X-Request-Id', ''),
-            'wa_message_id' => $this->extractMessageId($payload),
-            'wa_phone' => $this->piiMasker->maskValue('phone', $this->extractPhone($payload)),
-        ]);
+        // (Req 10) Idempotency. A duplicate wa_message_id must not restart the
+        // flow or trigger a duplicate reply. Cache::add() is atomic; in
+        // production this is Redis-backed and works across tasks.
+        if ($waMessageId !== '' && ! Cache::add($this->idempotencyKey($waMessageId), 1, now()->addDay())) {
+            Log::info('lead_intake_handoff_duplicate', [
+                'correlation_id' => $correlationId,
+                'wa_message_id' => $waMessageId,
+                'wa_phone' => $this->piiMasker->maskValue('phone', $waPhone),
+                'source' => 'lead_intake_agent',
+                'mode' => 'lead_intake_handoff',
+                'internal_secret_valid' => true,
+                'detected_role' => $detectedRole,
+                'reply_text_present' => false,
+                'duplicate' => true,
+            ]);
 
-        if (! $this->isSignupIntent($messageText)) {
-            return response()->json(['status' => 'ignored', 'reason' => 'not_signup_intent'], 202);
+            return response()->json([
+                'status' => 'duplicate',
+                'mode' => 'lead_intake_handoff',
+                'wa_message_id' => $waMessageId,
+                'reply_text' => null,
+            ]);
         }
 
+        $replyText = $this->replyText($detectedRole);
+
+        // (Req 11) One structured log line per handoff with all required fields.
+        Log::info('lead_intake_handoff_accepted', [
+            'correlation_id' => $correlationId,
+            'wa_message_id' => $waMessageId,
+            'wa_phone' => $this->piiMasker->maskValue('phone', $waPhone),
+            'source' => 'lead_intake_agent',
+            'mode' => 'lead_intake_handoff',
+            'internal_secret_valid' => true,
+            'detected_role' => $detectedRole,
+            'reply_text_present' => $replyText !== '',
+            'duplicate' => false,
+        ]);
+
+        // (Req 8) Do NOT send WhatsApp here. Return reply_text to lead-intake.
         return response()->json([
             'status' => 'accepted',
             'mode' => 'lead_intake_handoff',
-            'reply_text' => match ($role) {
-                'student' => "Great, let's create your student profile. What is your full name?",
-                'tutor' => "Great, let's create your tutor profile. What is your full name?",
-                default => 'Welcome to NXtutors signup. Are you joining as a student or tutor?',
-            },
-        ], 202);
+            'wa_message_id' => $waMessageId,
+            'wa_phone' => $waPhone,
+            'detected_role' => $detectedRole,
+            'reply_text' => $replyText,
+        ]);
+    }
+
+    private function idempotencyKey(string $waMessageId): string
+    {
+        return 'nxtutors:onboarding:handoff:' . sha1($waMessageId);
     }
 
     /** @param array<string, mixed> $payload */
     private function extractText(array $payload): string
     {
-        $flatText = $payload['message_text'] ?? $payload['text'] ?? null;
-        if (is_scalar($flatText) && (string) $flatText !== '') {
-            return (string) $flatText;
+        $flatText = $this->firstScalar($payload, ['message_text', 'text', 'body']);
+        if ($flatText !== '') {
+            return $flatText;
         }
 
         $message = $payload['entry'][0]['changes'][0]['value']['messages'][0] ?? null;
@@ -134,9 +204,9 @@ final readonly class WebhookEventController
     /** @param array<string, mixed> $payload */
     private function extractPhone(array $payload): string
     {
-        $phone = $payload['wa_phone'] ?? null;
-        if (is_scalar($phone) && (string) $phone !== '') {
-            return (string) $phone;
+        $phone = $this->firstScalar($payload, ['wa_phone', 'phone', 'from']);
+        if ($phone !== '') {
+            return $phone;
         }
 
         return (string) ($payload['entry'][0]['changes'][0]['value']['messages'][0]['from'] ?? '');
@@ -145,38 +215,51 @@ final readonly class WebhookEventController
     /** @param array<string, mixed> $payload */
     private function extractMessageId(array $payload): string
     {
-        $messageId = $payload['wa_message_id'] ?? null;
-        if (is_scalar($messageId) && (string) $messageId !== '') {
-            return (string) $messageId;
+        $messageId = $this->firstScalar($payload, ['wa_message_id', 'message_id', 'id']);
+        if ($messageId !== '') {
+            return $messageId;
         }
 
         return (string) ($payload['entry'][0]['changes'][0]['value']['messages'][0]['id'] ?? '');
     }
 
-    private function isSignupIntent(string $text): bool
+    /**
+     * @param array<string, mixed> $payload
+     * @param list<string>         $keys
+     */
+    private function firstScalar(array $payload, array $keys): string
     {
-        $text = trim((string) preg_replace('/\s+/', ' ', strtolower($text)));
-
-        foreach (['signup', 'sign up', 'register', 'registration', 'create account'] as $keyword) {
-            if ($text === $keyword || str_contains($text, $keyword)) {
-                return true;
+        foreach ($keys as $key) {
+            $value = $payload[$key] ?? null;
+            if (is_scalar($value) && (string) $value !== '') {
+                return (string) $value;
             }
         }
 
-        return false;
+        return '';
     }
 
-    private function requestedSignupRole(string $text): ?string
+    private function detectRole(string $text): string
     {
-        $text = strtolower($text);
-        if (str_contains($text, 'tutor') || str_contains($text, 'teacher')) {
+        $text = trim((string) preg_replace('/\s+/', ' ', strtolower($text)));
+
+        if (str_contains($text, 'tutor') || str_contains($text, 'teacher') || str_contains($text, 'teach')) {
             return 'tutor';
         }
 
-        if (str_contains($text, 'student')) {
+        if (str_contains($text, 'student') || str_contains($text, 'parent') || str_contains($text, 'learner') || str_contains($text, 'study')) {
             return 'student';
         }
 
-        return null;
+        return 'unknown';
+    }
+
+    private function replyText(string $role): string
+    {
+        return match ($role) {
+            'student' => "Great, let's create your student profile. What is your full name?",
+            'tutor' => "Great, let's create your tutor profile. What is your full name?",
+            default => 'Welcome to NXtutors signup. Are you joining as a student or tutor?',
+        };
     }
 }

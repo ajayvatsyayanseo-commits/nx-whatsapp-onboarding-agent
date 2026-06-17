@@ -117,6 +117,7 @@ Store runtime secrets in AWS Secrets Manager, not GitHub secrets:
 
 ```text
 APP_KEY
+ONBOARDING_AGENT_INTERNAL_SECRET
 DB_HOST
 DB_NAME
 DB_USERNAME
@@ -133,6 +134,8 @@ DASHBOARD_SIGNING_KEY
 S3_MEDIA_BUCKET
 S3_ANALYTICS_BUCKET
 ```
+
+`ONBOARDING_AGENT_INTERNAL_SECRET` is mandatory in production — see [Internal Handoff From Lead Intake](#internal-handoff-from-lead-intake).
 
 The ECS task definition reads these using the `secrets_arns` map in Terraform.
 
@@ -303,15 +306,183 @@ Checks:
 - webhook verification URL when configured
 - `/api/nx-whatsapp-onboarding/health` in strong mode
 
-## Meta Webhook URL
+## Internal Handoff From Lead Intake
 
-After ALB/domain deployment, set the Meta webhook callback URL to:
+The NXtutors WhatsApp system runs two agents against the **same** Meta WhatsApp
+phone number:
+
+1. **Lead Intake Agent** — owns the public Meta webhook for the shared number.
+2. **WhatsApp Onboarding Agent** — this service.
+
+Only one webhook URL can be registered with Meta for a number, so the onboarding
+agent **must not** be the public Meta webhook receiver. Pointing both agents at
+Meta causes a webhook ownership conflict and both stop working.
+
+### Flow
 
 ```text
-https://your-domain/whatsapp/onboarding/webhook
+Meta WhatsApp Cloud API
+  -> Lead Intake Agent public webhook (verifies X-Hub-Signature-256)
+  -> Lead Intake detects a signup/onboarding message
+  -> Lead Intake POSTs an internal handoff to Onboarding with
+     header X-NXTUTORS-INTERNAL-SECRET (not a Meta signature)
+  -> Onboarding validates the internal secret, detects the role,
+     and returns reply_text (it does NOT send WhatsApp itself)
+  -> Lead Intake sends exactly ONE WhatsApp reply to the user
 ```
 
-Use the same `META_WHATSAPP_VERIFY_TOKEN` stored in Secrets Manager.
+Onboarding never sends a WhatsApp message for a handoff request; it returns
+`reply_text` and lead-intake sends the single reply. This prevents both
+containers replying to the same user at the same time.
+
+### Handoff request contract
+
+`POST /whatsapp/onboarding/webhook`
+
+A request is treated as a lead-intake handoff when **either** the
+`X-NXTUTORS-INTERNAL-SECRET` header is present **or** the JSON body has
+`source = "lead_intake_agent"`. Field aliases are normalized:
+
+- phone: `wa_phone` | `phone` | `from`
+- text: `message_text` | `text` | `body`
+- message id: `wa_message_id` | `message_id` | `id`
+
+```json
+{
+  "source": "lead_intake_agent",
+  "wa_message_id": "wamid.HBg...",
+  "wa_phone": "919999999999",
+  "message_text": "I want to register as tutor",
+  "timestamp": "1717000000",
+  "message_type": "text",
+  "raw_payload": {}
+}
+```
+
+Accepted response:
+
+```json
+{
+  "status": "accepted",
+  "mode": "lead_intake_handoff",
+  "wa_message_id": "wamid.HBg...",
+  "wa_phone": "919999999999",
+  "detected_role": "tutor",
+  "reply_text": "Great, let's create your tutor profile. What is your full name?"
+}
+```
+
+Response codes:
+
+- `200/202` accepted — body carries `reply_text` for lead-intake to send.
+- `200` duplicate — repeated `wa_message_id`; body is
+  `{"status":"duplicate","mode":"lead_intake_handoff","reply_text":null}`. The
+  flow is not restarted and no reply is sent.
+- `401` unauthorized — wrong or missing internal secret on a handoff:
+  `{"status":"unauthorized","reason":"invalid_internal_secret"}`.
+- `503` misconfigured — `ONBOARDING_AGENT_INTERNAL_SECRET` is not set on the
+  server in production:
+  `{"status":"error","reason":"server_internal_secret_not_configured"}`. The
+  service never silently accepts handoffs without a secret.
+
+### Required environment variables
+
+```text
+ONBOARDING_AGENT_INTERNAL_SECRET   # REQUIRED. Shared secret lead-intake must send.
+APP_ENV=production                 # Enables strict 503-on-missing-secret behaviour.
+ONBOARDING_HANDOFF_ENABLED=true    # Optional kill switch for the handoff route.
+
+# For genuine Meta webhook verification (defence in depth if pointed at directly):
+META_WHATSAPP_APP_SECRET           # or META_APP_SECRET
+
+# Only if onboarding sends direct WhatsApp messages in non-handoff paths:
+META_WHATSAPP_ACCESS_TOKEN         # or META_ACCESS_TOKEN
+META_WHATSAPP_PHONE_NUMBER_ID      # or META_PHONE_NUMBER_ID
+
+# Optional: cross-task idempotency for the standalone public/index.php runtime.
+# Point at a shared volume, or run the Laravel package form (Redis/DB backed).
+ONBOARDING_IDEMPOTENCY_DIR=/var/run/nxtutors-onboarding-idemp
+```
+
+Generate a strong secret and store it in Secrets Manager for **both** agents:
+
+```bash
+openssl rand -hex 32
+```
+
+### curl examples
+
+Valid handoff (returns `reply_text`):
+
+```bash
+curl -X POST "$ONBOARDING_URL/whatsapp/onboarding/webhook" \
+  -H "Content-Type: application/json" \
+  -H "X-NXTUTORS-INTERNAL-SECRET: $ONBOARDING_AGENT_INTERNAL_SECRET" \
+  -d '{
+    "source": "lead_intake_agent",
+    "wa_message_id": "wamid.test123",
+    "wa_phone": "919999999999",
+    "message_text": "I want to register as tutor",
+    "timestamp": "1234567890",
+    "message_type": "text"
+  }'
+```
+
+Invalid secret (returns `401`):
+
+```bash
+curl -i -X POST "$ONBOARDING_URL/whatsapp/onboarding/webhook" \
+  -H "Content-Type: application/json" \
+  -H "X-NXTUTORS-INTERNAL-SECRET: wrong-secret" \
+  -d '{"source":"lead_intake_agent","wa_message_id":"wamid.x","message_text":"signup"}'
+# HTTP/1.1 401 Unauthorized
+# {"status":"unauthorized","reason":"invalid_internal_secret"}
+```
+
+Handoff health:
+
+```bash
+curl -s "$ONBOARDING_URL/health/internal-handoff"
+# {"status":"ok","internal_handoff":{"onboarding_agent_internal_secret_configured":true,"handoff_route_enabled":true}}
+```
+
+### Lead-intake side
+
+Lead-intake must, for each forwarded signup/onboarding message:
+
+1. POST the handoff to `$ONBOARDING_URL/whatsapp/onboarding/webhook` with the
+   `X-NXTUTORS-INTERNAL-SECRET` header set to the shared secret.
+2. On a `200/202 accepted` response, send the returned `reply_text` to the user
+   as the single WhatsApp reply.
+3. On `duplicate`, send nothing.
+4. On `401`/`503`, alert — the secret is wrong/missing or onboarding is
+   misconfigured.
+
+## Health Endpoints
+
+The onboarding agent exposes:
+
+```text
+/health                    overall status + handoff/whatsapp check summary
+/health/live               liveness
+/health/ready              readiness
+/health/db                 database connectivity (503 if configured and down)
+/health/whatsapp           Meta credential configuration status
+/health/internal-handoff   secret configured + handoff route enabled
+/health/deep               full dependency check (Laravel form, auth-protected)
+```
+
+## Meta Webhook URL
+
+The onboarding agent is **not** the public Meta webhook for the shared number.
+Keep the Meta callback URL pointed at the **lead-intake** agent. The
+`GET /whatsapp/onboarding/webhook` verification endpoint here exists only for
+defence in depth and standalone testing; if you ever register it directly, use
+the same `META_WHATSAPP_VERIFY_TOKEN` stored in Secrets Manager:
+
+```text
+https://your-onboarding-domain/whatsapp/onboarding/webhook
+```
 
 ## Rotate Meta Token
 

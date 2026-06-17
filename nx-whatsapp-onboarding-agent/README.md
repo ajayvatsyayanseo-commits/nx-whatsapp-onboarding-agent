@@ -75,9 +75,14 @@ Laravel auto-discovers `NxTutors\WhatsAppOnboarding\Bootstrap\ServiceProvider`.
 
 ## Routes
 
-- `GET /whatsapp/onboarding/webhook` verifies the Meta webhook token.
-- `POST /whatsapp/onboarding/webhook` validates the Meta signature, stores the inbound event, dispatches `ProcessInboundWhatsAppEventJob`, and returns quickly.
+- `GET /whatsapp/onboarding/webhook` verifies the Meta webhook token (defence in depth; this agent is not the public Meta webhook).
+- `POST /whatsapp/onboarding/webhook` accepts either:
+  - an **internal handoff** from the lead-intake agent (`X-NXTUTORS-INTERNAL-SECRET` header or `source = lead_intake_agent`), validated against `ONBOARDING_AGENT_INTERNAL_SECRET` and answered with `reply_text` — onboarding does **not** send WhatsApp itself; or
+  - a **genuine Meta webhook**, which still requires a valid `X-Hub-Signature-256`, stores the inbound event, dispatches `ProcessInboundWhatsAppEventJob`, and returns quickly.
 - `GET /api/nx-whatsapp-onboarding/health` is a simple package health endpoint.
+- `GET /health`, `/health/live`, `/health/ready`, `/health/db`, `/health/whatsapp`, `/health/internal-handoff` expose service and dependency status.
+
+> The onboarding agent shares one Meta WhatsApp number with the lead-intake agent. Only lead-intake is the public Meta webhook; it forwards signup/onboarding messages here over an authenticated internal call. See [DEPLOYMENT.md → Internal Handoff From Lead Intake](DEPLOYMENT.md#internal-handoff-from-lead-intake).
 
 ## Required Environment
 
@@ -85,6 +90,12 @@ Laravel auto-discovers `NxTutors\WhatsAppOnboarding\Bootstrap\ServiceProvider`.
 WHATSAPP_ONBOARDING_ENABLED=true
 WHATSAPP_ONBOARDING_ROUTE_PREFIX=whatsapp/onboarding
 WHATSAPP_ONBOARDING_QUEUE=whatsapp-onboarding
+
+# Internal handoff from the lead-intake agent (REQUIRED in production).
+# Lead-intake sends this as the X-NXTUTORS-INTERNAL-SECRET header; onboarding
+# validates it instead of a Meta signature for forwarded messages.
+ONBOARDING_AGENT_INTERNAL_SECRET=
+ONBOARDING_HANDOFF_ENABLED=true
 
 META_WHATSAPP_VERIFY_TOKEN=
 META_WHATSAPP_APP_SECRET=
@@ -575,8 +586,12 @@ Alarm examples:
 
 Health endpoints:
 
+- `/health`
 - `/health/live`
 - `/health/ready`
+- `/health/db`
+- `/health/whatsapp`
+- `/health/internal-handoff`
 - `/health/deep` protected by Laravel `auth` middleware
 
 ## Analytics

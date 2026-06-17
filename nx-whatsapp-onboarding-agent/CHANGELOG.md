@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Fixed the shared-number webhook conflict: the onboarding agent now accepts secure internal handoffs from the lead-intake agent and is no longer expected to be the public Meta webhook receiver.
+- Internal handoff detection by `X-NXTUTORS-INTERNAL-SECRET` header or `source = lead_intake_agent`; handoffs are authenticated against `ONBOARDING_AGENT_INTERNAL_SECRET` instead of a Meta signature.
+- Returns `401 {"status":"unauthorized","reason":"invalid_internal_secret"}` for a wrong/missing internal secret, and `503` in production when the server secret is not configured (never silently accepted).
+- Normalizes handoff field aliases (`wa_phone|phone|from`, `message_text|text|body`, `wa_message_id|message_id|id`), detects student/tutor/unknown role, and returns `reply_text` for lead-intake to send (no duplicate WhatsApp sending).
+- Added idempotency on `wa_message_id` (duplicate handoffs return `reply_text: null`) and structured per-handoff logging (correlation_id, masked phone, source, mode, secret validity, role, reply presence, duplicate flag).
+- Genuine Meta webhook requests still require a valid `X-Hub-Signature-256` (`META_WHATSAPP_APP_SECRET` or `META_APP_SECRET`).
+- Read the internal/Meta secrets through config so they survive `php artisan config:cache`; added `META_*` env aliases.
+- Added health endpoints `/health`, `/health/db`, `/health/whatsapp`, `/health/internal-handoff`; expanded contract and controller tests; documented the handoff architecture and curl examples.
+
 ## 0.2.0
 
 - Added production hardening for AWS operations: policy guard, PII masking, STOP/UNSUBSCRIBE handling, pause/resume commands, health checks, circuit breakers, and retry/backoff controls.

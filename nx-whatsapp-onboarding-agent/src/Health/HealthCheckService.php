@@ -44,6 +44,56 @@ final class HealthCheckService
         return ['ok' => ! in_array(false, $checks, true), 'checks' => $checks];
     }
 
+    /** @return array<string, mixed> */
+    public function dbStatus(): array
+    {
+        $ok = $this->db();
+
+        return ['ok' => $ok, 'check' => 'db'];
+    }
+
+    /**
+     * WhatsApp/Meta configuration health. This agent does not have to send
+     * directly (lead-intake sends replies), so direct-send readiness is
+     * reported separately from genuine Meta-webhook verification readiness.
+     *
+     * @return array<string, mixed>
+     */
+    public function whatsappStatus(): array
+    {
+        $appSecret = (string) config('whatsapp_onboarding.meta.app_secret', '') !== '';
+        $accessToken = (string) config('whatsapp_onboarding.meta.access_token', '') !== '';
+        $phoneNumberId = (string) config('whatsapp_onboarding.meta.phone_number_id', '') !== '';
+        $verifyToken = (string) config('whatsapp_onboarding.meta.verify_token', '') !== '';
+
+        return [
+            'ok' => $appSecret || ($accessToken && $phoneNumberId),
+            'app_secret_configured' => $appSecret,
+            'access_token_configured' => $accessToken,
+            'phone_number_id_configured' => $phoneNumberId,
+            'verify_token_configured' => $verifyToken,
+            'direct_send_ready' => $accessToken && $phoneNumberId,
+        ];
+    }
+
+    /**
+     * Internal handoff health. Shows whether the shared secret is configured
+     * and whether the handoff route is enabled.
+     *
+     * @return array<string, mixed>
+     */
+    public function internalHandoffStatus(): array
+    {
+        $secretConfigured = (string) config('whatsapp_onboarding.internal_handoff.secret', '') !== '';
+        $routeEnabled = (bool) config('whatsapp_onboarding.internal_handoff.enabled', true);
+
+        return [
+            'ok' => $secretConfigured && $routeEnabled,
+            'onboarding_agent_internal_secret_configured' => $secretConfigured,
+            'handoff_route_enabled' => $routeEnabled,
+        ];
+    }
+
     private function db(): bool
     {
         try {

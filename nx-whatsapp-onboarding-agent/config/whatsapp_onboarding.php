@@ -9,11 +9,25 @@ return [
     'database_connection' => env('WHATSAPP_ONBOARDING_DB_CONNECTION', env('DB_CONNECTION', 'mysql')),
     'redis_connection' => env('WHATSAPP_ONBOARDING_REDIS_CONNECTION', env('REDIS_CONNECTION', 'default')),
 
+    // Internal handoff from the lead-intake agent.
+    //
+    // The lead-intake agent owns the public Meta webhook for the shared WhatsApp
+    // number. It forwards signup/onboarding messages to this agent over an
+    // internal HTTP call authenticated with a shared secret instead of a Meta
+    // X-Hub-Signature-256 header. Secrets MUST be read through config (not env()
+    // at call time) so they survive `php artisan config:cache` in production.
+    'internal_handoff' => [
+        'enabled' => env('ONBOARDING_HANDOFF_ENABLED', true),
+        'secret' => env('ONBOARDING_AGENT_INTERNAL_SECRET'),
+        'header' => 'X-NXTUTORS-INTERNAL-SECRET',
+        'source' => env('ONBOARDING_HANDOFF_SOURCE', 'lead_intake_agent'),
+    ],
+
     'meta' => [
         'verify_token' => env('META_WHATSAPP_VERIFY_TOKEN'),
-        'app_secret' => env('META_WHATSAPP_APP_SECRET'),
-        'access_token' => env('META_WHATSAPP_ACCESS_TOKEN'),
-        'phone_number_id' => env('META_WHATSAPP_PHONE_NUMBER_ID'),
+        'app_secret' => env('META_WHATSAPP_APP_SECRET', env('META_APP_SECRET')),
+        'access_token' => env('META_WHATSAPP_ACCESS_TOKEN', env('META_ACCESS_TOKEN')),
+        'phone_number_id' => env('META_WHATSAPP_PHONE_NUMBER_ID', env('META_PHONE_NUMBER_ID')),
         'api_version' => env('META_WHATSAPP_API_VERSION', 'v20.0'),
         'graph_base_url' => env('META_GRAPH_BASE_URL', 'https://graph.facebook.com'),
         'interactive_enabled' => env('META_WHATSAPP_INTERACTIVE_ENABLED', true),
