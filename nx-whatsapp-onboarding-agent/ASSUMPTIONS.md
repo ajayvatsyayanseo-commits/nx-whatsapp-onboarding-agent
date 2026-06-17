@@ -1,4 +1,4 @@
-# Assumptions
+# Assumptions here
 
 - The provided `register` schema exists in the NXtutors Laravel app and has a normal primary key usable by Eloquent.
 - The website can authenticate with `phone` plus `password` hash, or can be adapted to treat `phone` as the login identifier.
