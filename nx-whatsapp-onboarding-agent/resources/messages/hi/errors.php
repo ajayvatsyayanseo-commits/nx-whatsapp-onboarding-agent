@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 return [
-    'invalid_role' => "Kripya signup type chuniye:\n1. Student\n2. Tutor",
+    'invalid_role' => "Maaf kijiye, samajh nahi aaya. Aap kis roop mein judna chahte hain:\n1. Student\n2. Tutor\n\n1 ya 2 bhejein (ya \"student\" / \"tutor\" likhein).",
     'review_not_confirmed' => 'Summary confirm karne ke liye CONFIRM reply karein, ya support ke liye HUMAN.',
     'terms_not_accepted' => 'Terms padhkar exactly I AGREE reply karein.',
     'invalid_otp' => 'Ye OTP valid nahi hai. Latest OTP check karke retry karein.',

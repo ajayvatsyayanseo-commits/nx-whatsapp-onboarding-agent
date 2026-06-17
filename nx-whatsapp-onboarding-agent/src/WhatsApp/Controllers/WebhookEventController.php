@@ -243,12 +243,24 @@ final readonly class WebhookEventController
     {
         $text = trim((string) preg_replace('/\s+/', ' ', strtolower($text)));
 
+        // Explicit keywords take priority over the numbered menu so a phrase like
+        // "I want to register as tutor" is never mis-read as a menu number.
         if (str_contains($text, 'tutor') || str_contains($text, 'teacher') || str_contains($text, 'teach')) {
             return 'tutor';
         }
 
         if (str_contains($text, 'student') || str_contains($text, 'parent') || str_contains($text, 'learner') || str_contains($text, 'study')) {
             return 'student';
+        }
+
+        // Numbered menu answers: "1" => Student, "2" => Tutor. Accept a bare number
+        // or light decoration ("1", "1.", "1)", "option 1") so a quick reply works.
+        if (preg_match('/^(?:option\s*)?1[.):]?$/', $text) === 1) {
+            return 'student';
+        }
+
+        if (preg_match('/^(?:option\s*)?2[.):]?$/', $text) === 1) {
+            return 'tutor';
         }
 
         return 'unknown';
@@ -259,7 +271,7 @@ final readonly class WebhookEventController
         return match ($role) {
             'student' => "Great, let's create your student profile. What is your full name?",
             'tutor' => "Great, let's create your tutor profile. What is your full name?",
-            default => 'Welcome to NXtutors signup. Are you joining as a student or tutor?',
+            default => "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor\n\nReply 1 or 2 (or type \"student\" / \"tutor\").",
         };
     }
 }

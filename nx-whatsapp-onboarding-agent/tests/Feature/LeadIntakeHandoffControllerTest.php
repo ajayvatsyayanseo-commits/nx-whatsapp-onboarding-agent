@@ -60,6 +60,30 @@ final class LeadIntakeHandoffControllerTest extends TestCase
         ]);
     }
 
+    public function testNumberedMenuReplySelectsRole(): void
+    {
+        $student = $this->postJson('/whatsapp/onboarding/webhook', [
+            'source' => 'lead_intake_agent',
+            'wa_message_id' => 'wamid.ctrl-menu-1',
+            'message_text' => '1',
+        ], ['X-NXTUTORS-INTERNAL-SECRET' => self::SECRET]);
+
+        $student->assertOk();
+        $student->assertJson([
+            'detected_role' => 'student',
+            'reply_text' => "Great, let's create your student profile. What is your full name?",
+        ]);
+
+        $tutor = $this->postJson('/whatsapp/onboarding/webhook', [
+            'source' => 'lead_intake_agent',
+            'wa_message_id' => 'wamid.ctrl-menu-2',
+            'message_text' => '2',
+        ], ['X-NXTUTORS-INTERNAL-SECRET' => self::SECRET]);
+
+        $tutor->assertOk();
+        $tutor->assertJsonPath('detected_role', 'tutor');
+    }
+
     public function testInvalidSecretReturns401(): void
     {
         $response = $this->postJson('/whatsapp/onboarding/webhook', [

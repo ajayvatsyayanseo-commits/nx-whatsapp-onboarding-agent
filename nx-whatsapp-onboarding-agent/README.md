@@ -196,9 +196,10 @@ Student:
 
 ```text
 User: Hey NXtutors I want to signup
-Bot: Welcome to NXtutors. Please choose signup type:
-     1. As a Student
-     2. As a Tutor
+Bot: 👋 Welcome to NXtutors signup. Are you joining as a:
+     1. Student
+     2. Tutor
+     Reply 1 or 2 (or type "student" / "tutor").
 User: 1
 Bot: Please enter your full name.
 ...
@@ -215,9 +216,10 @@ Tutor:
 
 ```text
 User: tutor signup
-Bot: Welcome to NXtutors. Please choose signup type:
-     1. As a Student
-     2. As a Tutor
+Bot: 👋 Welcome to NXtutors signup. Are you joining as a:
+     1. Student
+     2. Tutor
+     Reply 1 or 2 (or type "student" / "tutor").
 User: tutor
 Bot: Please enter your full name.
 ...

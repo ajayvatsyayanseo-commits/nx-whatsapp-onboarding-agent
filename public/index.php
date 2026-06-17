@@ -173,6 +173,8 @@ function detect_role(string $text): string
 {
     $text = normalized_text($text);
 
+    // Explicit keywords take priority over the numbered menu so a phrase like
+    // "I want to register as tutor" is never mis-read as a menu number.
     if (str_contains($text, 'tutor') || str_contains($text, 'teacher') || str_contains($text, 'teach')) {
         return 'tutor';
     }
@@ -181,12 +183,22 @@ function detect_role(string $text): string
         return 'student';
     }
 
+    // Numbered menu answers: "1" => Student, "2" => Tutor. Accept a bare number
+    // or light decoration ("1", "1.", "1)", "option 1") so a quick reply works.
+    if (preg_match('/^(?:option\s*)?1[.):]?$/', $text) === 1) {
+        return 'student';
+    }
+
+    if (preg_match('/^(?:option\s*)?2[.):]?$/', $text) === 1) {
+        return 'tutor';
+    }
+
     return 'unknown';
 }
 
 function role_selection_message(): string
 {
-    return 'Welcome to NXtutors signup. Are you joining as a student or tutor?';
+    return "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor\n\nReply 1 or 2 (or type \"student\" / \"tutor\").";
 }
 
 function student_start_message(): string

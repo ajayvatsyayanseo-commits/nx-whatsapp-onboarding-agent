@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 return [
-    'welcome_choose_role' => "Welcome to NXtutors. Please choose signup type:\n1. As a Student\n2. As a Tutor",
+    'welcome_choose_role' => "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor\n\nReply 1 or 2 (or type \"student\" / \"tutor\").",
     'signup_hint' => 'Welcome to NXtutors. Reply signup to start your student or tutor registration.',
     'signup_disabled' => 'WhatsApp signup is currently unavailable. Please use the NXtutors website or contact support.',
     'role_disabled' => 'This signup type is currently unavailable on WhatsApp. Our team can help you continue.',
@@ -15,7 +15,7 @@ return [
     'cancelled' => 'Your NXtutors signup has been cancelled. Reply signup any time to start again.',
     'restart_confirm' => 'Restart will clear this draft. Reply CONFIRM to restart, or any other message to continue.',
     'restart_not_confirmed' => 'Restart was not confirmed. You can continue from the current step.',
-    'restarted' => "Okay, let's restart your signup. Please choose:\n1. As a Student\n2. As a Tutor",
+    'restarted' => "Okay, let's restart your signup. Are you joining as a:\n1. Student\n2. Tutor\n\nReply 1 or 2 (or type \"student\" / \"tutor\").",
     'skip_not_allowed' => 'This field is required, so SKIP is not available here.',
     'back_not_available' => 'There is no previous field to go back to.',
     'edit_unknown' => 'I could not find that field. Try REVIEW and then reply EDIT field_name.',

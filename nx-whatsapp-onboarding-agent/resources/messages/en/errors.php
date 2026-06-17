@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 return [
-    'invalid_role' => "Please choose signup type:\n1. As a Student\n2. As a Tutor",
+    'invalid_role' => "Sorry, I didn't catch that. Are you joining as a:\n1. Student\n2. Tutor\n\nReply 1 or 2 (or type \"student\" / \"tutor\").",
     'review_not_confirmed' => 'Please reply YES to confirm the summary, or type HELP for support.',
     'terms_not_accepted' => 'Please read the terms link and reply exactly I AGREE to continue.',
     'invalid_otp' => 'That OTP is not valid. Please check the latest OTP and try again.',

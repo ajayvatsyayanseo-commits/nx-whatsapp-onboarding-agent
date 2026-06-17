@@ -63,7 +63,7 @@ final class LeadIntakeWebhookContractTest extends TestCase
         self::assertSame('unknown', $body['detected_role']);
         self::assertSame('wamid.valid-1', $body['wa_message_id']);
         self::assertSame(
-            'Welcome to NXtutors signup. Are you joining as a student or tutor?',
+            "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor\n\nReply 1 or 2 (or type \"student\" / \"tutor\").",
             $body['reply_text']
         );
     }
@@ -124,6 +124,30 @@ final class LeadIntakeWebhookContractTest extends TestCase
         self::assertSame("Great, let's create your student profile. What is your full name?", $studentBody['reply_text']);
         self::assertSame('tutor', $tutorBody['detected_role']);
         self::assertSame("Great, let's create your tutor profile. What is your full name?", $tutorBody['reply_text']);
+    }
+
+    public function testNumberedMenuRepliesSelectRole(): void
+    {
+        // The role prompt offers "1. Student" / "2. Tutor". A user replying with
+        // just the number must start the matching flow, not loop on the prompt.
+        [, $oneBody] = $this->postWebhook(self::SECRET, [
+            'wa_message_id' => 'wamid.menu-1',
+            'message_text' => '1',
+        ]);
+        [, $twoBody] = $this->postWebhook(self::SECRET, [
+            'wa_message_id' => 'wamid.menu-2',
+            'message_text' => '2',
+        ]);
+        [, $dottedBody] = $this->postWebhook(self::SECRET, [
+            'wa_message_id' => 'wamid.menu-1-dot',
+            'message_text' => '1.',
+        ]);
+
+        self::assertSame('student', $oneBody['detected_role']);
+        self::assertSame("Great, let's create your student profile. What is your full name?", $oneBody['reply_text']);
+        self::assertSame('tutor', $twoBody['detected_role']);
+        self::assertSame("Great, let's create your tutor profile. What is your full name?", $twoBody['reply_text']);
+        self::assertSame('student', $dottedBody['detected_role']);
     }
 
     public function testDuplicateMessageIdIsNotProcessedTwice(): void
@@ -190,7 +214,7 @@ final class LeadIntakeWebhookContractTest extends TestCase
         self::assertContains($status, [200, 202]);
         self::assertSame('accepted', $body['status']);
         self::assertSame(
-            'Welcome to NXtutors signup. Are you joining as a student or tutor?',
+            "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor\n\nReply 1 or 2 (or type \"student\" / \"tutor\").",
             $body['reply_text']
         );
     }
@@ -218,7 +242,7 @@ final class LeadIntakeWebhookContractTest extends TestCase
         self::assertSame('accepted', $body['status']);
         self::assertSame('wamid.forwarded', $body['wa_message_id']);
         self::assertSame(
-            'Welcome to NXtutors signup. Are you joining as a student or tutor?',
+            "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor\n\nReply 1 or 2 (or type \"student\" / \"tutor\").",
             $body['reply_text']
         );
     }
