@@ -271,7 +271,7 @@ final readonly class WebhookEventController
         return match ($role) {
             'student' => "Great, let's create your student profile. What is your full name?",
             'tutor' => "Great, let's create your tutor profile. What is your full name?",
-            default => "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor\n\nReply 1 or 2 (or type \"student\" / \"tutor\").",
+            default => "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor",
         };
     }
 }

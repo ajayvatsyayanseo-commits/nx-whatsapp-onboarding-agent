@@ -63,7 +63,7 @@ final class LeadIntakeWebhookContractTest extends TestCase
         self::assertSame('unknown', $body['detected_role']);
         self::assertSame('wamid.valid-1', $body['wa_message_id']);
         self::assertSame(
-            "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor\n\nReply 1 or 2 (or type \"student\" / \"tutor\").",
+            "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor",
             $body['reply_text']
         );
     }
@@ -111,12 +111,16 @@ final class LeadIntakeWebhookContractTest extends TestCase
 
     public function testStudentAndTutorSignupStartTheirRoleFlows(): void
     {
+        // Distinct phones: each starts its own stateful conversation so the two
+        // role flows do not collide on a shared session.
         [, $studentBody] = $this->postWebhook(self::SECRET, [
             'wa_message_id' => 'wamid.student-1',
+            'wa_phone' => '919000000011',
             'message_text' => 'student signup',
         ]);
         [, $tutorBody] = $this->postWebhook(self::SECRET, [
             'wa_message_id' => 'wamid.tutor-1',
+            'wa_phone' => '919000000012',
             'message_text' => 'tutor signup',
         ]);
 
@@ -130,16 +134,21 @@ final class LeadIntakeWebhookContractTest extends TestCase
     {
         // The role prompt offers "1. Student" / "2. Tutor". A user replying with
         // just the number must start the matching flow, not loop on the prompt.
+        // Distinct phones so each bare-number reply starts a fresh conversation
+        // rather than being read as an answer to a previous question.
         [, $oneBody] = $this->postWebhook(self::SECRET, [
             'wa_message_id' => 'wamid.menu-1',
+            'wa_phone' => '919000000021',
             'message_text' => '1',
         ]);
         [, $twoBody] = $this->postWebhook(self::SECRET, [
             'wa_message_id' => 'wamid.menu-2',
+            'wa_phone' => '919000000022',
             'message_text' => '2',
         ]);
         [, $dottedBody] = $this->postWebhook(self::SECRET, [
             'wa_message_id' => 'wamid.menu-1-dot',
+            'wa_phone' => '919000000023',
             'message_text' => '1.',
         ]);
 
@@ -214,7 +223,7 @@ final class LeadIntakeWebhookContractTest extends TestCase
         self::assertContains($status, [200, 202]);
         self::assertSame('accepted', $body['status']);
         self::assertSame(
-            "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor\n\nReply 1 or 2 (or type \"student\" / \"tutor\").",
+            "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor",
             $body['reply_text']
         );
     }
@@ -242,7 +251,7 @@ final class LeadIntakeWebhookContractTest extends TestCase
         self::assertSame('accepted', $body['status']);
         self::assertSame('wamid.forwarded', $body['wa_message_id']);
         self::assertSame(
-            "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor\n\nReply 1 or 2 (or type \"student\" / \"tutor\").",
+            "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor",
             $body['reply_text']
         );
     }

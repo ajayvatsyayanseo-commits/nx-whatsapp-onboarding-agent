@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 return [
-    'welcome_choose_role' => "👋 NXtutors signup mein swagat hai. Aap kis roop mein judna chahte hain:\n1. Student\n2. Tutor\n\n1 ya 2 bhejein (ya \"student\" / \"tutor\" likhein).",
+    'welcome_choose_role' => "👋 NXtutors signup mein swagat hai. Aap kis roop mein judna chahte hain:\n1. Student\n2. Tutor",
     'signup_hint' => 'NXtutors signup shuru karne ke liye signup reply karein.',
     'signup_disabled' => 'WhatsApp signup abhi unavailable hai. Kripya NXtutors website ya support use karein.',
     'role_disabled' => 'Ye signup type WhatsApp par abhi unavailable hai. Hamari team help karegi.',

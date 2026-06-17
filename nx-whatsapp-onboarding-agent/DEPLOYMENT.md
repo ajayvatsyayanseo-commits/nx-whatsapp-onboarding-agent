@@ -359,6 +359,10 @@ A request is treated as a lead-intake handoff when **either** the
 }
 ```
 
+The onboarding agent keeps a per-phone conversation state (file-backed in the
+standalone `public/index.php` runtime), so each forwarded message advances the
+signup flow (role → fields → review → terms → done) instead of restarting.
+
 Accepted response:
 
 ```json
@@ -368,13 +372,39 @@ Accepted response:
   "wa_message_id": "wamid.HBg...",
   "wa_phone": "919999999999",
   "detected_role": "tutor",
+  "handled": true,
   "reply_text": "Great, let's create your tutor profile. What is your full name?"
+}
+```
+
+Forwarded response (out of context):
+
+When a message arrives and the phone is **not** in an onboarding flow and the
+text is **not** a signup intent (e.g. a generic question, "hi", a message after
+the signup already completed, or after the user cancelled), onboarding does not
+own it and returns `handled:false` / `forward_to_lead_intake:true` with a null
+`reply_text`. Lead-intake must then answer the message with its own logic.
+
+```json
+{
+  "status": "forwarded",
+  "mode": "lead_intake_handoff",
+  "wa_message_id": "wamid.HBg...",
+  "wa_phone": "919999999999",
+  "detected_role": "unknown",
+  "handled": false,
+  "forward_to_lead_intake": true,
+  "reply_text": null
 }
 ```
 
 Response codes:
 
-- `200/202` accepted — body carries `reply_text` for lead-intake to send.
+- `200/202` accepted — body carries `reply_text` for lead-intake to send, and
+  `handled:true`.
+- `200` forwarded — onboarding does not own this message; body has
+  `handled:false`, `forward_to_lead_intake:true`, `reply_text:null`. Lead-intake
+  should handle the message with its own flow (do not send the onboarding reply).
 - `200` duplicate — repeated `wa_message_id`; body is
   `{"status":"duplicate","mode":"lead_intake_handoff","reply_text":null}`. The
   flow is not restarted and no reply is sent.
@@ -399,10 +429,61 @@ META_WHATSAPP_APP_SECRET           # or META_APP_SECRET
 META_WHATSAPP_ACCESS_TOKEN         # or META_ACCESS_TOKEN
 META_WHATSAPP_PHONE_NUMBER_ID      # or META_PHONE_NUMBER_ID
 
-# Optional: cross-task idempotency for the standalone public/index.php runtime.
-# Point at a shared volume, or run the Laravel package form (Redis/DB backed).
-ONBOARDING_IDEMPOTENCY_DIR=/var/run/nxtutors-onboarding-idemp
+# Optional: idempotency, conversation state, and captured leads for the
+# standalone public/index.php runtime. All default to subfolders under a temp
+# dir if unset. For more than one replica/task, point these at a SHARED volume
+# (e.g. EFS) so a user's messages reach the same conversation state regardless of
+# which task handles them — or run a single web task. Otherwise the signup flow
+# can lose state across replicas. The Laravel package form uses Redis/DB instead.
+ONBOARDING_IDEMPOTENCY_DIR=/var/run/nxtutors-onboarding/idemp
+ONBOARDING_SESSION_DIR=/var/run/nxtutors-onboarding/sessions
+ONBOARDING_LEADS_DIR=/var/run/nxtutors-onboarding/leads
 ```
+
+### Real `register` account creation (standalone runtime)
+
+When `WHATSAPP_CREATE_REAL_PROFILE=true` **and** a database is configured,
+`public/index.php` creates the real website `register` row directly via PDO at
+the end of signup (after `I AGREE`) and returns login credentials (login page,
+masked email, one-time temporary password, dashboard, checklist). The temporary
+password is stored only as a bcrypt hash (`password_hash`, Laravel-compatible),
+`c_password` is left empty, and `force_password_reset` is set when the column
+exists. The insert is schema-introspected (`SHOW COLUMNS` / `information_schema`)
+so it only writes columns that actually exist in the legacy table, and it guards
+against duplicate `email`/`phone` before inserting.
+
+Required environment for direct creation:
+
+```text
+WHATSAPP_CREATE_REAL_PROFILE=true
+DB_CONNECTION=mysql            # the live website DB (mysql|pgsql|sqlite)
+DB_HOST=...
+DB_PORT=3306
+DB_DATABASE=...                # or DB_NAME
+DB_USERNAME=...                # or DB_USER
+DB_PASSWORD=...
+WHATSAPP_ONBOARDING_REGISTER_TABLE=register   # optional, defaults to "register"
+WHATSAPP_STUDENT_STATUS=t      # value written to register.status for students
+WHATSAPP_TUTOR_STATUS=t        # value written to register.status for tutors
+WHATSAPP_OTP_STATUS_VERIFIED=t # value written to register.otp_status
+WHATSAPP_USER_TYPE_STUDENT=student     # optional override (default: student)
+WHATSAPP_USER_TYPE_TUTOR=Individual    # optional override (default: Individual)
+WHATSAPP_USER_ID_PREFIX_STUDENT=NXS
+WHATSAPP_USER_ID_PREFIX_TUTOR=NXT
+WHATSAPP_ONBOARDING_TEMP_PASSWORD_LENGTH=12
+WHATSAPP_ONBOARDING_LOGIN_URL=https://www.nxtutors.com/login
+STUDENT_DASHBOARD_URL=https://www.nxtutors.com/user/dashboard
+TUTOR_DASHBOARD_URL=https://www.nxtutors.com/teacher/dashboard
+```
+
+`public/index.php` reads these from the container environment via `getenv()` (it
+does not load the Laravel `.env`), so set them in the ECS task definition /
+container env, not only in the package `.env`.
+
+Whether or not direct creation is enabled, every completed signup is also written
+to `ONBOARDING_LEADS_DIR` (one JSON file per lead plus an appended `leads.jsonl`)
+as an audit record and as the fallback when `WHATSAPP_CREATE_REAL_PROFILE` is off
+or a DB write fails (the user still gets a confirmation; the lead is not lost).
 
 Generate a strong secret and store it in Secrets Manager for **both** agents:
 
@@ -451,11 +532,16 @@ curl -s "$ONBOARDING_URL/health/internal-handoff"
 Lead-intake must, for each forwarded signup/onboarding message:
 
 1. POST the handoff to `$ONBOARDING_URL/whatsapp/onboarding/webhook` with the
-   `X-NXTUTORS-INTERNAL-SECRET` header set to the shared secret.
-2. On a `200/202 accepted` response, send the returned `reply_text` to the user
-   as the single WhatsApp reply.
-3. On `duplicate`, send nothing.
-4. On `401`/`503`, alert — the secret is wrong/missing or onboarding is
+   `X-NXTUTORS-INTERNAL-SECRET` header set to the shared secret. Forward **every**
+   message from a user who is in (or starting) signup, not only the first — the
+   onboarding agent keeps the conversation state and needs each reply to advance.
+2. On a `200/202 accepted` response (`handled:true`), send the returned
+   `reply_text` to the user as the single WhatsApp reply.
+3. On `forwarded` (`handled:false` / `forward_to_lead_intake:true`), onboarding
+   does not own this message — handle it with lead-intake's own logic and send
+   that reply instead.
+4. On `duplicate`, send nothing.
+5. On `401`/`503`, alert — the secret is wrong/missing or onboarding is
    misconfigured.
 
 ## Health Endpoints
