@@ -13,7 +13,7 @@ declare(strict_types=1);
  *
  * WhatsApp chat cannot host a payment UI or a file-upload form, so this entire
  * sub-flow runs on a web page behind a one-time, unguessable token. Payment is
- * verified through Razorpay (order + signature, with a webhook backup) before
+ * verified through Cashfree (order status + webhook backup) before
  * the upload/AI/account steps unlock.
  *
  * No Composer libraries are used (the runtime has none) — only curl, hash_hmac,
@@ -218,67 +218,121 @@ function pro_http(string $method, string $url, array $options = []): array
 }
 
 /* -------------------------------------------------------------------------- */
-/* Razorpay                                                                   */
+/* Cashfree (Payment Gateway — PG Orders API)                                  */
 /* -------------------------------------------------------------------------- */
 
-/** @return array{0:string,1:string} [key_id, key_secret] */
-function razorpay_keys(): array
+/** @return array{0:string,1:string,2:string,3:string} [app_id, secret_key, base_url, api_version] */
+function cashfree_creds(): array
 {
-    return [env_value('RAZORPAY_KEY_ID'), env_value('RAZORPAY_KEY_SECRET')];
+    $appId = env_value('CASHFREE_APP_ID');
+    $secret = env_value('CASHFREE_SECRET_KEY');
+    $version = env_value('CASHFREE_API_VERSION') ?: '2023-08-01';
+    $base = cashfree_is_production() ? 'https://api.cashfree.com' : 'https://sandbox.cashfree.com';
+
+    return [$appId, $secret, $base, $version];
 }
 
-/** Create a Razorpay order; returns the order id or '' on failure. */
-function razorpay_create_order(int $amountPaise, string $receipt): string
+function cashfree_is_production(): bool
 {
-    [$keyId, $keySecret] = razorpay_keys();
-    if ($keyId === '' || $keySecret === '') {
-        return '';
+    $env = strtolower(env_value('CASHFREE_ENV') ?: 'production');
+
+    return in_array($env, ['production', 'prod', 'live'], true);
+}
+
+/** @return list<string> curl headers for the Cashfree PG API */
+function cashfree_headers(): array
+{
+    [$appId, $secret, , $version] = cashfree_creds();
+
+    return [
+        'x-client-id: ' . $appId,
+        'x-client-secret: ' . $secret,
+        'x-api-version: ' . $version,
+        'Content-Type: application/json',
+    ];
+}
+
+/**
+ * Create a Cashfree order for this token.
+ *
+ * @return array{order_id:string,payment_session_id:string}|null
+ */
+function cashfree_create_order(int $amountInr, string $token, string $phone, string $returnUrl): ?array
+{
+    [$appId, $secret, $base] = cashfree_creds();
+    if ($appId === '' || $secret === '') {
+        return null;
     }
 
-    [$status, $body] = pro_http('POST', 'https://api.razorpay.com/v1/orders', [
-        'auth' => $keyId . ':' . $keySecret,
+    $phone10 = substr((string) preg_replace('/\D+/', '', $phone), -10);
+    $orderId = 'pro_' . $token;
+
+    [$status, $body] = pro_http('POST', $base . '/pg/orders', [
+        'headers' => cashfree_headers(),
         'json' => [
-            'amount' => $amountPaise,
-            'currency' => 'INR',
-            'receipt' => $receipt,
-            'payment_capture' => 1,
+            'order_id' => $orderId,
+            'order_amount' => (float) $amountInr,
+            'order_currency' => 'INR',
+            'customer_details' => [
+                'customer_id' => $token,
+                'customer_phone' => $phone10 !== '' ? $phone10 : '9999999999',
+                'customer_email' => $token . '@nxtutors.in',
+            ],
+            'order_meta' => [
+                'return_url' => $returnUrl,
+            ],
         ],
         'timeout' => 20,
     ]);
 
     if ($status < 200 || $status >= 300) {
-        error_log(json_encode(['event' => 'razorpay_order_failed', 'status' => $status], JSON_UNESCAPED_SLASHES));
+        error_log(json_encode(['event' => 'cashfree_order_failed', 'status' => $status], JSON_UNESCAPED_SLASHES));
 
+        return null;
+    }
+
+    $decoded = json_decode($body, true);
+    $sessionId = is_array($decoded) ? (string) ($decoded['payment_session_id'] ?? '') : '';
+    if ($sessionId === '') {
+        return null;
+    }
+
+    return ['order_id' => $orderId, 'payment_session_id' => $sessionId];
+}
+
+/** Fetch the Cashfree order status (e.g. PAID / ACTIVE / EXPIRED), or '' on error. */
+function cashfree_order_status(string $orderId): string
+{
+    [$appId, $secret, $base] = cashfree_creds();
+    if ($appId === '' || $secret === '' || $orderId === '') {
+        return '';
+    }
+
+    [$status, $body] = pro_http('GET', $base . '/pg/orders/' . rawurlencode($orderId), [
+        'headers' => cashfree_headers(),
+        'timeout' => 20,
+    ]);
+
+    if ($status < 200 || $status >= 300) {
         return '';
     }
 
     $decoded = json_decode($body, true);
 
-    return is_array($decoded) ? (string) ($decoded['id'] ?? '') : '';
+    return is_array($decoded) ? strtoupper((string) ($decoded['order_status'] ?? '')) : '';
 }
 
-function razorpay_verify_payment_signature(string $orderId, string $paymentId, string $signature): bool
+/** Verify a Cashfree webhook signature (base64 HMAC-SHA256 of timestamp + rawBody). */
+function cashfree_verify_webhook(string $rawBody, string $signature, string $timestamp): bool
 {
-    [, $keySecret] = razorpay_keys();
-    if ($keySecret === '' || $orderId === '' || $paymentId === '' || $signature === '') {
+    [, $secret] = cashfree_creds();
+    if ($secret === '' || $signature === '' || $timestamp === '') {
         return false;
     }
 
-    $expected = hash_hmac('sha256', $orderId . '|' . $paymentId, $keySecret);
+    $expected = base64_encode(hash_hmac('sha256', $timestamp . $rawBody, $secret, true));
 
     return hash_equals($expected, $signature);
-}
-
-function razorpay_verify_webhook(string $rawBody, string $signatureHeader): bool
-{
-    $secret = env_value('RAZORPAY_WEBHOOK_SECRET');
-    if ($secret === '' || $signatureHeader === '') {
-        return false;
-    }
-
-    $expected = hash_hmac('sha256', $rawBody, $secret);
-
-    return hash_equals($expected, $signatureHeader);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -568,40 +622,37 @@ function pro_page_landing(string $token, array $record): never
             . '<p class="muted">Developer mode — no real payment is taken.</p>');
     }
 
-    [$keyId] = razorpay_keys();
-    if ($keyId === '') {
+    [$appId] = cashfree_creds();
+    if ($appId === '') {
         pro_page_error('Online payment is not configured yet. Please try again later.', 503);
     }
 
-    // Create (or reuse) the Razorpay order for this token.
-    $orderId = (string) ($record['order_id'] ?? '');
-    if ($orderId === '') {
-        $orderId = razorpay_create_order($price * 100, 'pro_' . substr($token, 0, 12));
-        if ($orderId === '') {
+    // Create (or reuse) the Cashfree order for this token.
+    $sessionId = (string) ($record['payment_session_id'] ?? '');
+    if ($sessionId === '' || ($record['order_id'] ?? '') === '') {
+        $order = cashfree_create_order($price, $token, (string) ($record['wa_phone'] ?? ''), pro_base_url() . '/pro/' . $token . '/return');
+        if ($order === null) {
             pro_page_error('Could not start the payment. Please try again in a moment.', 502);
         }
-        $record['order_id'] = $orderId;
+        $record['order_id'] = $order['order_id'];
+        $record['payment_session_id'] = $order['payment_session_id'];
+        $sessionId = $order['payment_session_id'];
         save_pro($token, $record);
-        pro_index_order($orderId, $token);
+        pro_index_order($order['order_id'], $token);
     }
 
-    $verifyUrl = pro_base_url() . '/pro/' . $token . '/verify';
-    $formUrl = pro_base_url() . '/pro/' . $token . '/form';
+    $mode = cashfree_is_production() ? 'production' : 'sandbox';
 
     $inner = '<h1>NXtutors Pro Profile</h1>'
         . '<h2>Our AI writes a full, SEO-rich tutor profile from your CV.</h2>'
         . '<p>One-time fee: <strong>₹' . $price . '</strong></p>'
         . '<button id="pay">Pay ₹' . $price . ' now</button>'
-        . '<p class="muted">Secure payment via Razorpay (UPI / cards / netbanking).</p>'
-        . '<script src="https://checkout.razorpay.com/v1/checkout.js"></script><script>'
-        . 'document.getElementById("pay").onclick=function(){var rzp=new Razorpay({'
-        . 'key:' . json_encode($keyId) . ',order_id:' . json_encode($orderId) . ','
-        . 'amount:' . ($price * 100) . ',currency:"INR",name:"NXtutors Pro Profile",'
-        . 'description:"AI-written tutor profile",'
-        . 'handler:function(r){fetch(' . json_encode($verifyUrl) . ',{method:"POST",headers:{"Content-Type":"application/json"},'
-        . 'body:JSON.stringify(r)}).then(function(x){return x.json();}).then(function(j){'
-        . 'if(j.ok){window.location=' . json_encode($formUrl) . ';}else{alert("Payment verification failed. If money was deducted, contact support.");}});}'
-        . '});rzp.open();};</script>';
+        . '<p class="muted">Secure payment via Cashfree (UPI / cards / netbanking).</p>'
+        . '<script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script><script>'
+        . 'var cashfree=Cashfree({mode:' . json_encode($mode) . '});'
+        . 'document.getElementById("pay").onclick=function(){'
+        . 'cashfree.checkout({paymentSessionId:' . json_encode($sessionId) . ',redirectTarget:"_self"});'
+        . '};</script>';
 
     pro_html('NXtutors Pro — Payment', $inner);
 }
@@ -774,29 +825,30 @@ function pro_maybe_send_whatsapp(string $phone, string $email, string $tempPassw
 }
 
 /* -------------------------------------------------------------------------- */
-/* Webhook (Razorpay)                                                         */
+/* Webhook (Cashfree)                                                         */
 /* -------------------------------------------------------------------------- */
 
 function pro_handle_webhook(): never
 {
     $raw = file_get_contents('php://input');
     $raw = $raw === false ? '' : $raw;
-    $sig = (string) ($_SERVER['HTTP_X_RAZORPAY_SIGNATURE'] ?? '');
+    $sig = (string) ($_SERVER['HTTP_X_WEBHOOK_SIGNATURE'] ?? '');
+    $ts = (string) ($_SERVER['HTTP_X_WEBHOOK_TIMESTAMP'] ?? '');
 
-    if (! razorpay_verify_webhook($raw, $sig)) {
+    if (! cashfree_verify_webhook($raw, $sig, $ts)) {
         pro_json(['status' => 'invalid_signature'], 400);
     }
 
     $payload = json_decode($raw, true);
-    $orderId = (string) ($payload['payload']['payment']['entity']['order_id'] ?? '');
-    $paymentId = (string) ($payload['payload']['payment']['entity']['id'] ?? '');
+    $orderId = (string) ($payload['data']['order']['order_id'] ?? '');
+    $paymentStatus = strtoupper((string) ($payload['data']['payment']['payment_status'] ?? ''));
 
-    if ($orderId !== '') {
+    if ($orderId !== '' && ($paymentStatus === 'SUCCESS' || $paymentStatus === '')) {
         $token = pro_token_for_order($orderId);
         $record = $token !== '' ? load_pro($token) : null;
-        if ($record !== null && ($record['status'] ?? '') === 'created') {
+        // Confirm with the orders API before unlocking (defence in depth).
+        if ($record !== null && ($record['status'] ?? '') === 'created' && cashfree_order_status($orderId) === 'PAID') {
             $record['status'] = 'paid';
-            $record['payment_id'] = $paymentId;
             save_pro($token, $record);
         }
     }
@@ -835,21 +887,26 @@ function pro_handle_request(string $path, string $method): void
         pro_page_landing($token, $record);
     }
 
-    if ($action === 'verify' && $method === 'POST') {
-        $input = json_decode((string) file_get_contents('php://input'), true);
-        $input = is_array($input) ? $input : $_POST;
-        $ok = razorpay_verify_payment_signature(
-            (string) ($input['razorpay_order_id'] ?? ''),
-            (string) ($input['razorpay_payment_id'] ?? ''),
-            (string) ($input['razorpay_signature'] ?? '')
-        );
-        if (! $ok) {
-            pro_json(['ok' => false], 400);
+    if ($action === 'return' && $method === 'GET') {
+        // Cashfree redirects the browser here after checkout. Confirm the order
+        // status server-side before unlocking the upload form.
+        if (($record['status'] ?? '') !== 'paid' && ($record['status'] ?? '') !== 'submitted' && ($record['status'] ?? '') !== 'completed') {
+            $orderId = (string) ($record['order_id'] ?? '');
+            if ($orderId !== '' && cashfree_order_status($orderId) === 'PAID') {
+                $record['status'] = 'paid';
+                save_pro($token, $record);
+            }
         }
-        $record['status'] = 'paid';
-        $record['payment_id'] = (string) ($input['razorpay_payment_id'] ?? '');
-        save_pro($token, $record);
-        pro_json(['ok' => true, 'redirect' => pro_base_url() . '/pro/' . $token . '/form']);
+
+        if (in_array($record['status'] ?? '', ['paid', 'submitted', 'completed'], true)) {
+            header('Location: ' . pro_base_url() . '/pro/' . $token . '/form');
+            exit;
+        }
+
+        pro_html('NXtutors Pro — Payment', '<h1>Payment not completed</h1>'
+            . '<h2>We could not confirm your payment yet.</h2>'
+            . '<p class="muted">If money was deducted it will be auto-confirmed shortly — reopen your link in a minute. Otherwise you can try again.</p>'
+            . '<a class="btn" href="' . pro_e(pro_base_url() . '/pro/' . $token) . '">Try payment again</a>', 402);
     }
 
     if ($action === 'simulate-paid' && $method === 'POST') {
