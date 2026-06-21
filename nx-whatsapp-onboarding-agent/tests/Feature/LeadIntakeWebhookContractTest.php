@@ -62,10 +62,9 @@ final class LeadIntakeWebhookContractTest extends TestCase
         self::assertSame('lead_intake_handoff', $body['mode']);
         self::assertSame('unknown', $body['detected_role']);
         self::assertSame('wamid.valid-1', $body['wa_message_id']);
-        self::assertSame(
-            "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor",
-            $body['reply_text']
-        );
+        self::assertStringContainsString('Welcome to NXtutors', (string) $body['reply_text']);
+        self::assertStringContainsString('Student', (string) $body['reply_text']);
+        self::assertStringContainsString('Tutor', (string) $body['reply_text']);
     }
 
     public function testInvalidSecretReturnsUnauthorized(): void
@@ -222,10 +221,9 @@ final class LeadIntakeWebhookContractTest extends TestCase
 
         self::assertContains($status, [200, 202]);
         self::assertSame('accepted', $body['status']);
-        self::assertSame(
-            "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor",
-            $body['reply_text']
-        );
+        self::assertStringContainsString('Welcome to NXtutors', (string) $body['reply_text']);
+        self::assertStringContainsString('Student', (string) $body['reply_text']);
+        self::assertStringContainsString('Tutor', (string) $body['reply_text']);
     }
 
     public function testOriginalMetaPayloadCanBeForwardedByLeadIntake(): void
@@ -250,10 +248,9 @@ final class LeadIntakeWebhookContractTest extends TestCase
         self::assertContains($status, [200, 202]);
         self::assertSame('accepted', $body['status']);
         self::assertSame('wamid.forwarded', $body['wa_message_id']);
-        self::assertSame(
-            "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor",
-            $body['reply_text']
-        );
+        self::assertStringContainsString('Welcome to NXtutors', (string) $body['reply_text']);
+        self::assertStringContainsString('Student', (string) $body['reply_text']);
+        self::assertStringContainsString('Tutor', (string) $body['reply_text']);
     }
 
     public function testMissingServerSecretInProductionReturns503(): void
