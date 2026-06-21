@@ -150,3 +150,78 @@ Do not create Lambda for the main agent:
 CREATE_LAMBDA_FUNCTION=false
 DEPLOY_TARGET=ecs
 ```
+
+## Tutor "Pro Mode" (paid AI profile)
+
+> IMPORTANT — where config actually takes effect:
+> Your live deploy is **CloudPanel** (`.github/workflows/deploy-cloudpanel.yml`). It rsyncs files
+> over SSH and **excludes `.env`**, so the running app reads config from the **server `.env`**, NOT
+> from GitHub secrets/variables. GitHub Environment secrets only feed the (currently unused) AWS ECS
+> workflows. **So to turn Pro Mode on for the live site, edit the server `.env` below.** The GitHub
+> entries are only needed if/when you deploy via AWS.
+
+### A) Server `.env` (CloudPanel — THIS is what enables Pro mode)
+
+Add these to the same server `.env` that already holds your `DB_*` / `META_*` values. On the
+CloudPanel box that is one of (first that exists wins, per `load_onboarding_env()`):
+
+```text
+/home/nxtutors-onboarding/htdocs/onboarding.nxtutors.com/public/.env
+/home/nxtutors-onboarding/htdocs/onboarding.nxtutors.com/.env
+/home/nxtutors-onboarding/htdocs/onboarding.nxtutors.com/nx-whatsapp-onboarding-agent/.env
+```
+
+Edit it via CloudPanel File Manager or SSH and append:
+
+```env
+# --- Tutor Pro Mode ---
+# Keep PRO_MODE_ENABLED=false until the Razorpay keys below are filled & tested.
+PRO_MODE_ENABLED=false
+PRO_MODE_PRICE_INR=10
+PRO_MODE_BASE_URL=https://onboarding.nxtutors.com
+
+# Razorpay (LEAVE for you to fill — money settles to the bank/UPI in your Razorpay dashboard).
+# Use test-mode keys first. Webhook URL to register in Razorpay: https://onboarding.nxtutors.com/pro/webhook (event: payment.captured)
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+RAZORPAY_WEBHOOK_SECRET=
+
+# OpenAI (the GitHub OPENAI_API_KEY does NOT reach CloudPanel — set it here on the server too).
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o
+
+# Private storage (must be writable by the web user; outside the public/ web root).
+PRO_DIR=/home/nxtutors-onboarding/onboarding-data/pro
+PRO_CV_DIR=/home/nxtutors-onboarding/onboarding-data/cv
+PRO_CV_MAX_KB=5120
+PRO_WHATSAPP_CONFIRM=true
+```
+
+After filling the Razorpay + OpenAI values and confirming one test signup, set
+`PRO_MODE_ENABLED=true`. Also raise the CloudPanel site's PHP upload limits
+(`upload_max_filesize` / `post_max_size`) to ~8M for CV uploads.
+
+### B) GitHub (only for the AWS workflow path — add these yourself in the UI)
+
+I could not add these from here (this CLI token has `push` but not `admin`; only the repo owner can
+edit Actions secrets/variables). Add as repo **Variables**:
+
+```text
+PRO_MODE_ENABLED=false
+PRO_MODE_PRICE_INR=10
+PRO_MODE_BASE_URL=https://onboarding.nxtutors.com
+OPENAI_MODEL=gpt-4o
+PRO_DIR=/var/run/nxtutors-onboarding/pro
+PRO_CV_DIR=/var/run/nxtutors-onboarding/cv
+PRO_CV_MAX_KB=5120
+PRO_WHATSAPP_CONFIRM=true
+```
+
+Add as repo/Environment **Secrets** (Razorpay left blank for you; OpenAI key already added):
+
+```text
+RAZORPAY_KEY_ID=          # you will fill
+RAZORPAY_KEY_SECRET=      # you will fill
+RAZORPAY_WEBHOOK_SECRET=  # you will fill
+# OPENAI_API_KEY already exists
+```

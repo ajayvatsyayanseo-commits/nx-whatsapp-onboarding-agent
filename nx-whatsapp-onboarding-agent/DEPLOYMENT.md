@@ -485,6 +485,52 @@ to `ONBOARDING_LEADS_DIR` (one JSON file per lead plus an appended `leads.jsonl`
 as an audit record and as the fallback when `WHATSAPP_CREATE_REAL_PROFILE` is off
 or a DB write fails (the user still gets a confirmation; the lead is not lost).
 
+### Tutor "Pro mode" (paid, AI-written SEO profile)
+
+When `PRO_MODE_ENABLED=true`, a user who chooses **Tutor** is offered two paths in chat:
+
+1. **Fill manually** — the normal field-by-field flow.
+2. **Pro mode (₹N)** — the bot replies with a private one-time link
+   `{PRO_MODE_BASE_URL}/pro/<token>`. WhatsApp cannot host a payment UI or a file-upload form, so
+   this runs on a hosted web page served by `public/index.php` (via `public/pro.php`):
+   pay (Razorpay) → upload CV + Name + Subject + Email → OpenAI writes a 2000+ word SEO profile →
+   the real `register` row is created → the page shows the login + temporary password. The chat
+   session is then closed; account creation reuses the same `create_register_profile()` path.
+
+Payment is verified server-side (Razorpay order + `razorpay_signature`, with a webhook backup at
+`POST /pro/webhook`); upload/AI/account steps are gated on a verified payment. Money settles to the
+**bank/UPI configured in the Razorpay dashboard** — a raw `upi://` VPA is not used because a
+personal VPA cannot be auto-verified.
+
+Required environment (set as GitHub Actions secrets / ECS task env — `public/index.php` reads them
+via `getenv()`):
+
+```text
+PRO_MODE_ENABLED=true
+PRO_MODE_PRICE_INR=10
+PRO_MODE_BASE_URL=https://<public-onboarding-domain>   # builds the /pro/<token> link
+RAZORPAY_KEY_ID=...            # public-ish, used in Checkout.js
+RAZORPAY_KEY_SECRET=...        # secret (server only)
+RAZORPAY_WEBHOOK_SECRET=...    # secret, for POST /pro/webhook HMAC
+OPENAI_API_KEY=...             # secret
+OPENAI_MODEL=gpt-4o            # optional
+PRO_DIR=/var/run/nxtutors-onboarding/pro      # pro-token store (shared volume if multi-replica)
+PRO_CV_DIR=/var/run/nxtutors-onboarding/cv    # private CV storage (NOT under web root)
+PRO_CV_MAX_KB=5120
+PRO_WHATSAPP_CONFIRM=true       # optional WhatsApp confirmation after success (needs META token)
+# dev/staging ONLY — auto-disabled when APP_ENV=production:
+PRO_MODE_FAKE_PAYMENT=false     # bypass gateway with a "Simulate paid" button for local testing
+PRO_MODE_FAKE_AI=false          # return a canned profile instead of calling OpenAI
+```
+
+Razorpay setup: create a Razorpay account, add your bank/UPI for settlement, use **test-mode**
+keys first, and register the webhook URL `{PRO_MODE_BASE_URL}/pro/webhook` with the
+`payment.captured` event and the `RAZORPAY_WEBHOOK_SECRET`. The new `/pro/*` routes need a public
+HTTPS path on the onboarding service (the same ALB/domain) and `client_max_body_size` large enough
+for CV uploads (raise the nginx limit above the default 256k — e.g. 8m). Real money requires a
+gateway; do not set the `PRO_MODE_FAKE_*` flags in production (they are ignored when
+`APP_ENV=production`).
+
 Generate a strong secret and store it in Secrets Manager for **both** agents:
 
 ```bash

@@ -1,0 +1,280 @@
+# =============================================================================
+# NXtutors WhatsApp Onboarding Agent - Local/Staging Environment Example
+# ============================================================================
+
+
+# =============================================================================
+# Laravel application
+# =============================================================================
+APP_ENV=local
+APP_KEY=  
+APP_URL=http://localhost:8000
+LOG_CHANNEL=stack
+HASH_DRIVER=bcrypt
+
+
+# =============================================================================
+# Website database connection
+# =============================================================================
+# IMPORTANT:
+# The agent creates the final user inside the existing website `register` table.
+# Point this DB connection to the same database used by the NXtutors website.
+#
+# If you currently use phpMyAdmin, your DB is probably MySQL/MariaDB:
+# DB_CONNECTION=mysql
+# DB_HOST=127.0.0.1
+# DB_PORT=3306
+#
+# AWS target architecture uses Aurora PostgreSQL:
+# DB_CONNECTION=pgsql
+# DB_HOST=your-rds-proxy-or-aurora-endpoint
+# DB_PORT=5432
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=newnx
+DB_USERNAME=newnx
+DB_PASSWORD=NewNxtute@2026!
+
+# Optional package-specific DB connection override.
+# Leave empty to use DB_CONNECTION.
+WHATSAPP_ONBOARDING_DB_CONNECTION=
+
+
+# =============================================================================
+# Redis and queue
+# =============================================================================
+REDIS_CONNECTION=default
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+QUEUE_CONNECTION=redis
+WHATSAPP_ONBOARDING_REDIS_CONNECTION=default
+WHATSAPP_ONBOARDING_QUEUE=whatsapp-onboarding
+
+
+# =============================================================================
+# Master feature flags
+# =============================================================================
+WHATSAPP_ONBOARDING_ENABLED=true
+WHATSAPP_SIGNUP_ENABLED=true
+WHATSAPP_STUDENT_SIGNUP_ENABLED=true
+WHATSAPP_TUTOR_SIGNUP_ENABLED=true
+
+# Create the real website `register` row directly after I AGREE.
+WHATSAPP_CREATE_REAL_PROFILE=true
+
+# Emergency pause switches.
+WHATSAPP_ONBOARDING_PAUSED=false
+WHATSAPP_ONBOARDING_PAUSE_REASON=
+WHATSAPP_OUTBOUND_PAUSED=false
+
+
+# =============================================================================
+# Routes
+# =============================================================================
+WHATSAPP_ONBOARDING_ROUTE_PREFIX=whatsapp/onboarding
+
+
+# =============================================================================
+# Meta WhatsApp Cloud API
+# =============================================================================
+# Get these from Meta Business Manager / WhatsApp Cloud API.
+META_WHATSAPP_VERIFY_TOKEN=nxtutors_whatsapp_verify_2026
+META_WHATSAPP_APP_SECRET=05c824e05221e3cffe2d8223ea6c23cb
+META_WHATSAPP_ACCESS_TOKEN=EAAemjedQmL8BRo7I7oRl98k0ACT8gxWHGaOZCZAGPPlpeTEHVHLEQ4oIpePWLZA8xOF583SaH6z0C7Sn0hAFvkyF7YAGn4FmWhWr15d6ncscVSriTVFZAoMZA0YZAkvnzlGR4J4pele6vfe10d8A434PERlxgOJCR5ZCyWY1oCqhOGBMfZB6ApF9HEkOTTvG7AZDZD
+META_WHATSAPP_PHONE_NUMBER_ID=1008454102350764
+META_WHATSAPP_API_VERSION=v20.0
+META_GRAPH_BASE_URL=https://graph.facebook.com
+
+META_WHATSAPP_INTERACTIVE_ENABLED=true
+META_REQUIRE_TEMPLATE_OUTSIDE_SESSION=true
+META_WHATSAPP_TEMPLATE_LANGUAGE=en_US
+
+
+# =============================================================================
+# Approved WhatsApp template names
+# =============================================================================
+# These must match approved template names in Meta for production.
+META_TEMPLATE_SIGNUP_RESUME=signup_resume
+META_TEMPLATE_OTP_MESSAGE=nxtutors_otp
+META_TEMPLATE_PROFILE_CREATED=profile_created
+META_TEMPLATE_HUMAN_HANDOFF=human_handoff
+
+
+# =============================================================================
+# URLs for terms and privacy policies:- Student
+# =============================================================================
+TERMS_STUDENT_URL=https://www.nxtutors.com/terms-conditions
+PRIVACY_STUDENT_URL=https://www.nxtutors.com/privacy-policy
+
+
+# =============================================================================
+# URLs for terms and privacy policies:- Tutor
+# =============================================================================
+TERMS_TUTOR_URL=https://www.nxtutors.com/terms-conditions
+PRIVACY_TUTOR_URL=https://www.nxtutors.com/privacy-policy
+
+
+# =============================================================================
+# Terms version and local placeholder policy
+# =============================================================================
+# Use a real version value in production, for example: 2026-06-terms-v1.
+TERMS_VERSION=local
+
+# Only use true in local development. Production config validation should fail
+# if placeholder policy URLs are used.
+TERMS_ALLOW_LOCAL_PLACEHOLDER=false
+
+
+# =============================================================================
+# Website dashboard and login URLs
+# =============================================================================
+STUDENT_DASHBOARD_URL=http://localhost:8000/student/dashboard
+TUTOR_DASHBOARD_URL=http://localhost:8000/tutor/dashboard
+WHATSAPP_ONBOARDING_LOGIN_URL=http://localhost:8000/login
+
+# If true, dashboard links can include a signed expiring token.
+# Raw phone/password are never placed in URLs.
+DASHBOARD_MAGIC_LOGIN_ENABLED=false
+WHATSAPP_ONBOARDING_SECURE_LINK_TTL_MINUTES=30
+
+
+# =============================================================================
+# Profile creation defaults
+# =============================================================================
+# The live `register` table stores status/otp_status as the char value `t`.
+# Do NOT use words like "active"/"pending_review" here — that breaks the insert.
+WHATSAPP_STUDENT_STATUS=t
+WHATSAPP_TUTOR_STATUS=t
+WHATSAPP_OTP_STATUS_VERIFIED=t
+WHATSAPP_USER_TYPE_STUDENT=student
+WHATSAPP_USER_TYPE_TUTOR=Individual
+WHATSAPP_TUTOR_DOCUMENTS_REQUIRE_REVIEW=true
+
+WHATSAPP_USER_ID_PREFIX_STUDENT=NXS
+WHATSAPP_USER_ID_PREFIX_TUTOR=NXT
+WHATSAPP_USER_ID_RANDOM_LENGTH=6
+
+WHATSAPP_ONBOARDING_APP_VERSION=local
+WHATSAPP_ONBOARDING_FLOW_VERSION=2026-01
+WHATSAPP_ONBOARDING_STATE_MACHINE_VERSION=2026-01
+WHATSAPP_ONBOARDING_MESSAGE_TEMPLATE_VERSION=2026-01
+
+
+# =============================================================================
+# Password and OTP security
+# =============================================================================
+WHATSAPP_ONBOARDING_TEMP_PASSWORD_LENGTH=18
+WHATSAPP_ONBOARDING_FORCE_RESET_COLUMN=force_password_reset
+
+WHATSAPP_ONBOARDING_OTP_LENGTH=6
+WHATSAPP_ONBOARDING_OTP_TTL_MINUTES=10
+WHATSAPP_ONBOARDING_OTP_MAX_ATTEMPTS=3
+WHATSAPP_ONBOARDING_OTP_RESEND_COOLDOWN_SECONDS=60
+
+
+# =============================================================================
+# Conversation state machine
+# =============================================================================
+WHATSAPP_ONBOARDING_CONVERSATION_TTL_MINUTES=10080
+WHATSAPP_ONBOARDING_REDIS_TTL_SECONDS=86400
+WHATSAPP_ONBOARDING_MAX_INVALID_ATTEMPTS=8
+WHATSAPP_ONBOARDING_MAX_INVALID_ATTEMPTS_PER_FIELD=3
+WHATSAPP_ONBOARDING_MIN_AGE_YEARS=0
+
+
+# =============================================================================
+# Input guardrails and validation
+# =============================================================================
+WHATSAPP_ONBOARDING_MAX_WEBHOOK_BYTES=262144
+WHATSAPP_ONBOARDING_MAX_MESSAGE_LENGTH=2000
+WHATSAPP_ONBOARDING_INBOUND_PER_PHONE_MINUTE=30
+WHATSAPP_ONBOARDING_INBOUND_PER_IP_MINUTE=120
+WHATSAPP_ONBOARDING_BLOCK_INJECTION_PATTERNS=true
+WHATSAPP_ONBOARDING_INDIA_PINCODE=true
+WHATSAPP_ONBOARDING_MASK_PII_LOGS=true
+WHATSAPP_ONBOARDING_ENCRYPT_SENSITIVE_DRAFTS=true
+
+
+# =============================================================================
+# Outbound rate limits and provider circuit breaker
+# =============================================================================
+WHATSAPP_ONBOARDING_MAX_MESSAGES_PER_PHONE_HOUR=20
+WHATSAPP_ONBOARDING_MAX_MESSAGES_GLOBAL_MINUTE=1000
+WHATSAPP_ONBOARDING_MAX_MEDIA_DOWNLOAD_MB=25
+
+META_CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+META_CIRCUIT_BREAKER_COOLDOWN_SECONDS=60
+
+
+# =============================================================================
+# Optional LLM extraction controls
+# =============================================================================
+# The onboarding flow works without LLM calls. Keep disabled by default.
+WHATSAPP_ONBOARDING_LLM_ENABLED=false
+WHATSAPP_ONBOARDING_LLM_DAILY_TOKEN_BUDGET=0
+LLM_MAX_CALLS_PER_CONVERSATION=2
+LLM_MAX_TOKENS_PER_CALL=600
+LLM_TIMEOUT_MS=1500
+LLM_DAILY_BUDGET_INR=0
+LLM_DAILY_BUDGET_USD=0
+LLM_LATENCY_BREAKER_MS=2500
+LLM_ERROR_RATE_BREAKER_PERCENT=20
+
+
+# =============================================================================
+# Media storage
+# =============================================================================
+# Local development can use local. Production should use s3.
+MEDIA_STORAGE_DRIVER=local
+WHATSAPP_ONBOARDING_LOCAL_MEDIA_PATH=nxtutors/onboarding
+
+AWS_S3_MEDIA_BUCKET=
+WHATSAPP_ONBOARDING_S3_MEDIA_BUCKET=
+AWS_S3_MEDIA_PREFIX=nxtutors/onboarding
+WHATSAPP_ONBOARDING_MEDIA_MAX_KB=2048
+WHATSAPP_ONBOARDING_DEGREE_ALLOWS_PDF=true
+
+
+# =============================================================================
+# AWS infrastructure
+# =============================================================================
+AWS_REGION=ap-south-1
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_SECRETS_MANAGER_PREFIX=/nxtutors/whatsapp-onboarding
+WHATSAPP_ONBOARDING_SQS_QUEUE_URL=
+WHATSAPP_ONBOARDING_EVENTBRIDGE_BUS=
+
+
+# =============================================================================
+# Observability, audit, and retention
+# =============================================================================
+WHATSAPP_ONBOARDING_LOG_CHANNEL=stack
+WHATSAPP_ONBOARDING_AUDIT_ENABLED=true
+WHATSAPP_ONBOARDING_METRICS_NAMESPACE=NXtutors/WhatsAppOnboarding
+WHATSAPP_ONBOARDING_TRACE_SAMPLE_RATE=0.1
+
+WHATSAPP_ONBOARDING_INCOMPLETE_DRAFT_RETENTION_DAYS=14
+WHATSAPP_ONBOARDING_RAW_WEBHOOK_RETENTION_DAYS=7
+WHATSAPP_ONBOARDING_STORE_RAW_WEBHOOK_PAYLOAD=true
+WHATSAPP_ONBOARDING_S3_RAW_PAYLOAD_EXPORT_ENABLED=false
+
+
+# =============================================================================
+# Analytics export for AWS Glue/Athena
+# =============================================================================
+WHATSAPP_ONBOARDING_ANALYTICS_DISK=local
+WHATSAPP_ONBOARDING_ANALYTICS_BUCKET=
+WHATSAPP_ONBOARDING_ANALYTICS_PREFIX=nxtutors/onboarding_events
+
+
+# =============================================================================
+# Drift evaluation thresholds
+# =============================================================================
+WHATSAPP_ONBOARDING_DRIFT_MIN_COMPLETION_RATE=40
+WHATSAPP_ONBOARDING_DRIFT_MAX_HANDOFF_RATE=25
+WHATSAPP_ONBOARDING_DRIFT_MAX_META_FAILURES=20

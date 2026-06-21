@@ -34,6 +34,7 @@ php artisan nxtutors:onboarding:audit-register-duplicates
 ## What It Does
 
 - Accepts WhatsApp signup intents such as `signup`, `I want to register`, `student signup`, and `tutor signup`.
+- Offers tutors a choice of **Fill manually** or **Pro mode** — a paid (₹N) web flow where the tutor pays via Razorpay, uploads a CV + Name + Subject + Email, and OpenAI writes a 2000+ word SEO‑rich profile before the account is created. Served on a hosted web page (`public/pro.php`) linked from the chat; see [DEPLOYMENT.md → Tutor "Pro mode"](DEPLOYMENT.md#tutor-pro-mode-paid-ai-written-seo-profile). Off by default (`PRO_MODE_ENABLED`).
 - Uses a finite state machine persisted in the website database and cached through the configured Laravel cache store.
 - Validates every collected field before profile creation.
 - Creates or updates the legacy NXtutors `register` profile through a package-scoped model and mapper.

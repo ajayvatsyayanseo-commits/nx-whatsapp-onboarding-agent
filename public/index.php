@@ -980,6 +980,25 @@ function duplicate_account_message(): string
         . '. If you need help, reply HUMAN.';
 }
 
+function tutor_mode_menu(): string
+{
+    $price = (int) (env_value('PRO_MODE_PRICE_INR') ?: 10);
+
+    return "You chose Tutor. How would you like to create your profile?\n\n"
+        . "1. Fill manually — answer a few quick questions here\n"
+        . "2. Pro mode (₹{$price}) — just upload your CV; our AI writes a full, SEO-rich profile for you";
+}
+
+function pro_link_message(string $url): string
+{
+    $price = (int) (env_value('PRO_MODE_PRICE_INR') ?: 10);
+
+    return "Great choice! 🚀 Pro mode (₹{$price}).\n\n"
+        . "Tap your private link to pay and upload your CV:\n" . $url . "\n\n"
+        . "After payment you'll add your CV, name and subject, and our AI will write your full tutor profile.\n"
+        . '(Or reply 1 to fill manually instead.)';
+}
+
 function max_invalid_attempts(): int
 {
     return (int) (env_value('WHATSAPP_ONBOARDING_MAX_INVALID_ATTEMPTS') ?: 8);
@@ -1154,6 +1173,49 @@ function process_message(string $phone, string $text): array
     }
 
     // ---------------------------------------------------------------------- //
+    // State: tutor chose between manual and Pro mode.                        //
+    // ---------------------------------------------------------------------- //
+    if (($session['state'] ?? '') === 'TUTOR_MODE') {
+        $t = normalized_text($text);
+        $wantsManual = preg_match('/^(?:option\s*)?1[.):]?$/', $t) === 1 || str_contains($t, 'manual');
+        $wantsPro = preg_match('/^(?:option\s*)?2[.):]?$/', $t) === 1 || str_contains($t, 'pro');
+
+        if ($wantsManual) {
+            return start_manual_flow($phone, 'tutor');
+        }
+
+        if ($wantsPro) {
+            if (! pro_mode_enabled()) {
+                return start_manual_flow($phone, 'tutor');
+            }
+            $token = pro_create_token($phone);
+            $url = pro_base_url() . '/pro/' . $token;
+            $session['state'] = 'PRO_PENDING';
+            $session['data']['pro_token'] = $token;
+            $session['invalid'] = 0;
+            save_session($phone, $session);
+
+            return ['status' => 'accepted', 'reply' => pro_link_message($url), 'role' => 'tutor', 'forward' => false];
+        }
+
+        return register_invalid($phone, $session, tutor_mode_menu());
+    }
+
+    // ---------------------------------------------------------------------- //
+    // State: tutor is finishing Pro mode on the web link.                    //
+    // ---------------------------------------------------------------------- //
+    if (($session['state'] ?? '') === 'PRO_PENDING') {
+        $t = normalized_text($text);
+        if (preg_match('/^(?:option\s*)?1[.):]?$/', $t) === 1 || str_contains($t, 'manual')) {
+            return start_manual_flow($phone, 'tutor');
+        }
+
+        $url = pro_base_url() . '/pro/' . (string) ($session['data']['pro_token'] ?? '');
+
+        return ['status' => 'accepted', 'reply' => "Please continue on your secure link to finish Pro signup:\n" . $url . "\n\nOr reply 1 to fill your profile manually instead.", 'role' => 'tutor', 'forward' => false];
+    }
+
+    // ---------------------------------------------------------------------- //
     // State: collecting fields.                                              //
     // ---------------------------------------------------------------------- //
     if (($session['state'] ?? '') === 'FIELDS') {
@@ -1223,6 +1285,30 @@ function process_message(string $phone, string $text): array
  * @return array{status:string,reply:?string,role:string,forward:bool}
  */
 function start_role(string $phone, string $role): array
+{
+    // Tutors get a choice between the manual flow and paid "Pro mode" (AI
+    // profile) when Pro mode is enabled. Students always go straight in.
+    if ($role === 'tutor' && pro_mode_enabled()) {
+        save_session($phone, [
+            'role' => 'tutor',
+            'state' => 'TUTOR_MODE',
+            'field' => 0,
+            'data' => ['wa_phone' => $phone, 'role' => 'tutor'],
+            'invalid' => 0,
+            'pending_restart' => false,
+            'return_to_review' => false,
+        ]);
+
+        return ['status' => 'accepted', 'reply' => tutor_mode_menu(), 'role' => 'tutor', 'forward' => false];
+    }
+
+    return start_manual_flow($phone, $role);
+}
+
+/**
+ * @return array{status:string,reply:?string,role:string,forward:bool}
+ */
+function start_manual_flow(string $phone, string $role): array
 {
     $fields = role_fields($role);
     save_session($phone, [
@@ -1519,6 +1605,16 @@ function check_internal_handoff(): array
         'handoff_route_enabled' => $routeEnabled,
         'ok' => $secretConfigured && $routeEnabled,
     ];
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tutor "Pro mode" web flow (payment + CV upload + AI profile)               */
+/* -------------------------------------------------------------------------- */
+
+require_once __DIR__ . '/pro.php';
+
+if ($path === '/pro' || str_starts_with($path, '/pro/')) {
+    pro_handle_request($path, $method);
 }
 
 /* -------------------------------------------------------------------------- */

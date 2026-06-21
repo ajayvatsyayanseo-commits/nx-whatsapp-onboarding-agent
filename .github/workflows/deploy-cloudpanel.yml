@@ -99,6 +99,23 @@ jobs:
             "$SSH_USER@$SSH_HOST" \
             "cd '$DEPLOY_PATH' && php nx-whatsapp-onboarding-agent/scripts/whatsapp_db_check.php || true"
 
+      - name: Pro mode post-deploy checks
+        run: |
+          # Lints the deployed PHP, creates PRO_DIR/PRO_CV_DIR if set in the
+          # server .env, and reports PHP upload limits. Fails the deploy on a
+          # PHP syntax error. Does NOT touch .env.
+          sshpass -e ssh -p "$SSH_PORT" -o StrictHostKeyChecking=accept-new \
+            "$SSH_USER@$SSH_HOST" \
+            "cd '$DEPLOY_PATH' && sh nx-whatsapp-onboarding-agent/scripts/pro_postdeploy.sh"
+
+      - name: Health check (non-fatal)
+        run: |
+          if curl -fsS --max-time 15 "https://$CLOUDPANEL_DOMAIN/health" >/tmp/health.json; then
+            echo "health: $(cat /tmp/health.json)"
+          else
+            echo "Health check did not return 200 (DNS/TLS may not point here from the runner)."
+          fi
+
       - name: Summary
         if: always()
         run: |
