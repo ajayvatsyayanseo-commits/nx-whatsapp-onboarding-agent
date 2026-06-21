@@ -330,13 +330,24 @@ function is_signup_intent(string $text): bool
 
 function role_selection_message(): string
 {
-    // No "Reply 1 or 2 ..." helper line — the numbered menu is self-explanatory.
-    return "👋 Welcome to NXtutors signup. Are you joining as a:\n1. Student\n2. Tutor";
+    return "👋 *Welcome to NXtutors!*\n\n"
+        . "Who are you signing up as?\n\n"
+        . "*1.* 🎓 _Student_\n"
+        . "      • Find expert tutors\n"
+        . "      • Book classes that fit you\n\n"
+        . "*2.* 👨‍🏫 _Tutor_\n"
+        . "      • Create your teaching profile\n"
+        . "      • Get student enquiries\n\n"
+        . "👉 _Reply 1 or 2_";
 }
 
 function invalid_role_message(): string
 {
-    return "Sorry, I didn't catch that. Are you joining as a:\n1. Student\n2. Tutor";
+    return "🤔 Sorry, I didn't catch that.\n\n"
+        . "Who are you signing up as?\n\n"
+        . "*1.* 🎓 Student\n"
+        . "*2.* 👨‍🏫 Tutor\n\n"
+        . "👉 _Reply 1 or 2_";
 }
 
 function mask_phone(string $phone): string
@@ -980,23 +991,120 @@ function duplicate_account_message(): string
         . '. If you need help, reply HUMAN.';
 }
 
+/** Shown when the WhatsApp number already has an account. */
+function duplicate_phone_message(): string
+{
+    return "✅ *You already have an NXtutors account* registered with this number.\n\n"
+        . "🔐 Please log in here:\n" . login_url() . "\n\n"
+        . "Need help? Reply *HUMAN*.";
+}
+
+/** Shown when the email the user typed already has an account. */
+function duplicate_email_message(string $email): string
+{
+    return "⚠️ An account already exists with *" . mask_email($email) . "*.\n\n"
+        . "🔐 Log in here:\n" . login_url() . "\n\n"
+        . "Or reply with a *different email* to continue your signup.";
+}
+
 function tutor_mode_menu(): string
 {
-    $price = (int) (env_value('PRO_MODE_PRICE_INR') ?: 10);
+    $price = (int) (env_value('PRO_MODE_PRICE_INR') ?: 2);
 
-    return "You chose Tutor. How would you like to create your profile?\n\n"
-        . "1. Fill manually — answer a few quick questions here\n"
-        . "2. Pro mode (₹{$price}) — just upload your CV; our AI writes a full, SEO-rich profile for you";
+    return "You chose *Tutor* 👨‍🏫\n\n"
+        . "How would you like to build your profile?\n\n"
+        . "*1️⃣  Fill manually*\n"
+        . "      • Answer a few quick questions\n"
+        . "      • You control every detail\n\n"
+        . "*2️⃣  Pro mode — ₹{$price}* ⚡\n"
+        . "      • Just upload your CV\n"
+        . "      • Our AI writes a full, SEO-rich profile\n"
+        . "      • Ready in about a minute\n\n"
+        . "👉 _Reply 1 or 2_";
 }
 
 function pro_link_message(string $url): string
 {
-    $price = (int) (env_value('PRO_MODE_PRICE_INR') ?: 10);
+    $price = (int) (env_value('PRO_MODE_PRICE_INR') ?: 2);
 
-    return "Great choice! 🚀 Pro mode (₹{$price}).\n\n"
-        . "Tap your private link to pay and upload your CV:\n" . $url . "\n\n"
-        . "After payment you'll add your CV, name and subject, and our AI will write your full tutor profile.\n"
-        . '(Or reply 1 to fill manually instead.)';
+    return "🚀 *Pro mode — ₹{$price}*\n\n"
+        . "Tap your private link to pay & upload your CV:\n" . $url . "\n\n"
+        . "*What happens next:*\n"
+        . "      1. Pay ₹{$price} securely (UPI / card)\n"
+        . "      2. Upload your CV + name + subject\n"
+        . "      3. Our AI writes your full profile ✍️\n"
+        . "      4. Get your login details 🔐\n\n"
+        . "_Reply 1 to fill manually instead._";
+}
+
+/* -------------------------------------------------------------------------- */
+/* Idle session timeout + duplicate-account helpers                           */
+/* -------------------------------------------------------------------------- */
+
+function session_idle_timeout_seconds(): int
+{
+    // Defaults to 60s (the requested "1 minute"); floored at 5s to avoid a
+    // misconfigured value timing out every single message.
+    return max(5, (int) (env_value('SESSION_IDLE_TIMEOUT_SECONDS') ?: 60));
+}
+
+function session_timeout_message(): string
+{
+    return "⏰ *Session paused*\n\n"
+        . "You were away for a little while, so I paused your signup to keep it safe.\n\n"
+        . "▶️ Reply *continue* to pick up exactly where you left off\n"
+        . "✖️ Reply *cancel* to stop";
+}
+
+/**
+ * Does an account already exist where the given register column matches the
+ * value? Uses a prepared statement and only the existing columns. Fails open
+ * (returns false) when no DB is configured so signup is never blocked by an
+ * outage — the final insert re-checks duplicates anyway.
+ */
+function account_exists(string $column, string $value): bool
+{
+    $value = trim($value);
+    if ($value === '') {
+        return false;
+    }
+
+    [$pdo, $driver] = pdo_connect();
+    if ($pdo === null) {
+        return false;
+    }
+
+    $table = register_table_name();
+    $columns = register_columns($pdo, $driver, $table);
+
+    return register_exists($pdo, $driver, $table, $columns, $column, $value);
+}
+
+/** Re-issue the prompt for the conversation's current step (used after resume). */
+function resume_current_step(string $phone, array $session): array
+{
+    $state = (string) ($session['state'] ?? '');
+    $role = (string) ($session['role'] ?? 'unknown');
+
+    if ($state === 'TUTOR_MODE') {
+        return ['status' => 'accepted', 'reply' => tutor_mode_menu(), 'role' => $role, 'forward' => false];
+    }
+    if ($state === 'PRO_PENDING') {
+        $url = pro_base_url() . '/pro/' . (string) ($session['data']['pro_token'] ?? '');
+
+        return ['status' => 'accepted', 'reply' => "▶️ Continue your Pro signup here:\n" . $url, 'role' => $role, 'forward' => false];
+    }
+    if ($state === 'REVIEW') {
+        return ['status' => 'accepted', 'reply' => review_summary($role, (array) $session['data']), 'role' => $role, 'forward' => false];
+    }
+    if ($state === 'TERMS') {
+        return ['status' => 'accepted', 'reply' => terms_prompt($role), 'role' => $role, 'forward' => false];
+    }
+    if ($state === 'FIELDS') {
+        return ['status' => 'accepted', 'reply' => current_field_question($session), 'role' => $role, 'forward' => false];
+    }
+
+    return ['status' => 'accepted', 'reply' => role_selection_message(), 'role' => $role, 'forward' => false];
 }
 
 function max_invalid_attempts(): int
@@ -1083,6 +1191,12 @@ function process_message(string $phone, string $text): array
     // ---------------------------------------------------------------------- //
     if ($session === null || ($session['state'] ?? '') === 'COMPLETED') {
         $role = detect_role($text);
+        $startingSignup = $role !== 'unknown' || is_signup_intent($text) || $command === 'signup';
+
+        // Duplicate guard: this WhatsApp number already has an NXtutors account.
+        if ($startingSignup && account_exists('phone', $phone)) {
+            return ['status' => 'accepted', 'reply' => duplicate_phone_message(), 'role' => 'unknown', 'forward' => false];
+        }
 
         if ($role !== 'unknown') {
             return start_role($phone, $role);
@@ -1108,6 +1222,43 @@ function process_message(string $phone, string $text): array
     }
 
     // ---------------------------------------------------------------------- //
+    // Idle timeout: pause an inactive session and offer to continue, instead //
+    // of treating this message as the answer to the current step.            //
+    // ---------------------------------------------------------------------- //
+    if (($session['state'] ?? '') !== 'TIMED_OUT'
+        && (time() - (int) ($session['updated_at'] ?? time())) > session_idle_timeout_seconds()) {
+        $session['resume_state'] = $session['state'] ?? 'ROLE';
+        $session['resume_field'] = $session['field'] ?? 0;
+        $session['state'] = 'TIMED_OUT';
+        save_session($phone, $session);
+
+        return ['status' => 'accepted', 'reply' => session_timeout_message(), 'role' => (string) ($session['role'] ?? 'unknown'), 'forward' => false];
+    }
+
+    // ---------------------------------------------------------------------- //
+    // State: paused (idle timeout) — wait for continue / cancel.             //
+    // ---------------------------------------------------------------------- //
+    if (($session['state'] ?? '') === 'TIMED_OUT') {
+        $t = normalized_text($text);
+        if ($command === 'cancel' || in_array($t, ['cancel', 'stop', 'no', 'end'], true)) {
+            clear_session($phone);
+
+            return ['status' => 'accepted', 'reply' => "Your signup was cancelled. Reply *signup* anytime to start again. 👋", 'role' => (string) ($session['role'] ?? 'unknown'), 'forward' => false];
+        }
+
+        if ($command === 'confirm' || in_array($t, ['continue', 'resume', 'yes', 'y', 'start', '1'], true) || str_contains($t, 'continue')) {
+            $session['state'] = (string) ($session['resume_state'] ?? 'ROLE');
+            $session['field'] = (int) ($session['resume_field'] ?? 0);
+            unset($session['resume_state'], $session['resume_field']);
+            save_session($phone, $session);
+
+            return resume_current_step($phone, $session);
+        }
+
+        return ['status' => 'accepted', 'reply' => session_timeout_message(), 'role' => (string) ($session['role'] ?? 'unknown'), 'forward' => false];
+    }
+
+    // ---------------------------------------------------------------------- //
     // Pending restart confirmation.                                          //
     // ---------------------------------------------------------------------- //
     if (($session['pending_restart'] ?? false) === true) {
@@ -1122,7 +1273,7 @@ function process_message(string $phone, string $text): array
                 'return_to_review' => false,
             ]);
 
-            return ['status' => 'accepted', 'reply' => "Okay, let's restart your signup. Are you joining as a:\n1. Student\n2. Tutor", 'role' => 'unknown', 'forward' => false];
+            return ['status' => 'accepted', 'reply' => "🔄 Okay, let's restart.\n\n" . role_selection_message(), 'role' => 'unknown', 'forward' => false];
         }
 
         $session['pending_restart'] = false;
@@ -1371,6 +1522,13 @@ function handle_field_input(string $phone, array $session, string $text, string 
     [$ok, $error] = validate_field($field['type'], $text);
     if (! $ok) {
         return register_invalid($phone, $session, $error);
+    }
+
+    // Duplicate guard: stop here if this email already has an account.
+    if ($field['key'] === 'email' && account_exists('email', trim($text))) {
+        save_session($phone, $session); // refresh activity so it does not idle-timeout
+
+        return ['status' => 'accepted', 'reply' => duplicate_email_message(trim($text)), 'role' => $role, 'forward' => false];
     }
 
     $session['data'][$field['key']] = trim($text);

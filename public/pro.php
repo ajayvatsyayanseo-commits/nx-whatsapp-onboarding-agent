@@ -31,7 +31,7 @@ function pro_mode_enabled(): bool
 
 function pro_price_inr(): int
 {
-    return max(1, (int) (env_value('PRO_MODE_PRICE_INR') ?: 10));
+    return max(1, (int) (env_value('PRO_MODE_PRICE_INR') ?: 2));
 }
 
 function pro_base_url(): string
