@@ -1121,7 +1121,7 @@ function detect_command(string $text): array
 {
     $t = normalized_text($text);
 
-    if ($t === 'cancel') {
+    if (in_array($t, ['cancel', 'stop', 'quit', 'exit'], true)) {
         return ['cancel', ''];
     }
     if ($t === 'restart' || $t === 'reset') {
@@ -1290,7 +1290,7 @@ function process_message(string $phone, string $text): array
     if ($command === 'cancel') {
         clear_session($phone);
 
-        return ['status' => 'accepted', 'reply' => 'Your NXtutors signup has been cancelled. Reply *signup* any time to start again.', 'role' => $role, 'forward' => false];
+        return ['status' => 'accepted', 'reply' => "🛑 Your signup is cancelled and this session is cleared.\n\nReply *signup* anytime to start fresh. 👋", 'role' => $role, 'forward' => false];
     }
 
     if ($command === 'human') {
