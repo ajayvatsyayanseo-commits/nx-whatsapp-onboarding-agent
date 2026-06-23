@@ -690,8 +690,9 @@ function pro_page_form(string $token, array $record): never
         . '<label>Full name</label><input type="text" name="name" required maxlength="255">'
         . '<label>Main subject you teach</label><input type="text" name="subject" required maxlength="255">'
         . '<label>Your city</label><input type="text" name="city" required maxlength="120" placeholder="e.g. Gurugram">'
+        . '<label>Email (optional — leave blank to use the email on your CV)</label><input type="email" name="email" maxlength="255">'
         . '<button type="submit">Generate my profile</button>'
-        . '<p class="muted">We read your login email from your CV. This can take up to a minute while our AI writes your profile.</p></form>';
+        . '<p class="muted">Your login email is read from your CV. This can take up to a minute while our AI writes your profile.</p></form>';
 
     pro_html('NXtutors Pro — Upload', $inner);
 }
@@ -777,10 +778,15 @@ function pro_handle_submit(string $token, array $record): never
         pro_page_error('We received your payment and CV but could not generate the profile right now. Our team will finish it and contact you on WhatsApp.', 200);
     }
 
-    // Login email comes from the CV; if none was found, derive a stable unique one.
-    $email = trim((string) ($ai['email'] ?? ''));
-    if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $email = 'tutor' . substr((string) preg_replace('/\D+/', '', $phone), -10) . '@nxtutors.in';
+    // Login email is read from the CV (never generated). An explicit email typed
+    // on the form takes priority; otherwise we use the one found on the CV.
+    $formEmail = trim((string) ($_POST['email'] ?? ''));
+    $cvEmail = trim((string) ($ai['email'] ?? ''));
+    $email = filter_var($formEmail, FILTER_VALIDATE_EMAIL)
+        ? $formEmail
+        : (filter_var($cvEmail, FILTER_VALIDATE_EMAIL) ? $cvEmail : '');
+    if ($email === '') {
+        pro_page_error('We could not find your email on your CV. Please go back, type your email in the optional Email box, and submit again.');
     }
     $record['email'] = $email;
     save_pro($token, $record);
