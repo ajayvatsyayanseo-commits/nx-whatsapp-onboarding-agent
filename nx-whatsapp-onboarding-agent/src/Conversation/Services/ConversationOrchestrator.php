@@ -137,13 +137,12 @@ final readonly class ConversationOrchestrator
 
         if ($this->registers->findByPhone($phone) !== null) {
             $conversation = $this->states->startOrResume($phone, [
-                'current_state' => ConversationState::HumanHandoff->value,
-                'status' => 'handoff',
+                'current_state' => ConversationState::ExistingAccount->value,
+                'status' => 'open',
                 'context' => ['wa_phone' => $phone, 'phone' => $phone],
             ]);
             $event->forceFill(['onboarding_conversation_id' => $conversation->id])->save();
             $this->messages->sendText($phone, __('nx-whatsapp-onboarding::common.duplicate_phone_login_help'));
-            $this->states->transition($conversation, ConversationState::ExistingAccount, []);
             return;
         }
 
