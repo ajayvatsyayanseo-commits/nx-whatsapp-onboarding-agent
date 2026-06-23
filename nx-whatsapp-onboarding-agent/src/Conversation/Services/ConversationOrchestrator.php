@@ -184,11 +184,17 @@ final readonly class ConversationOrchestrator
         }
 
         $detected = $this->commands->detect($text);
+
+        $state = ConversationState::from($conversation->current_state);
+        if ($state === ConversationState::ExistingAccount) {
+            $this->handleExistingAccountResponse($conversation, $text);
+            return;
+        }
+
         if ($this->handleGlobalCommand($conversation, $event, $message, $detected['command'], $detected['argument'])) {
             return;
         }
 
-        $state = ConversationState::from($conversation->current_state);
         if ($state === ConversationState::WaitingRoleSelection) {
             $this->handleRole($conversation, $detected['command'], $text);
             return;
@@ -665,6 +671,92 @@ final readonly class ConversationOrchestrator
     private function fieldFor(string $role, ConversationState $state): ?string
     {
         return $role === 'tutor' ? $this->tutorFlow->fieldFor($state) : $this->studentFlow->fieldFor($state);
+    }
+
+    private function handleExistingAccountResponse(OnboardingConversation $conversation, string $text): void
+    {
+        $text = strtolower(trim($text));
+
+        $phone = $conversation->wa_phone;
+        $existingAccount = $this->registers->findByPhone($phone);
+
+        if (! $existingAccount) {
+            $this->messages->sendText($phone, __('nx-whatsapp-onboarding::common.account_not_found'));
+            return;
+        }
+
+        if (str_contains($text, 'yes') || str_contains($text, 'confirm') || str_contains($text, 'correct')) {
+            $loginLink = $this->dashboardLinks->dashboardForRole($existingAccount->user_type, $existingAccount);
+            $message = "✅ *Account Found!*\n\n";
+            $message .= "👤 *Name:* {$existingAccount->name}\n";
+            $message .= "📧 *Email:* {$existingAccount->email}\n";
+            $message .= "🆔 *User ID:* {$existingAccount->user_id}\n\n";
+            $message .= "🔗 *Your dashboard link:*\n{$loginLink}\n\n";
+            $message .= "Click to login and manage your profile!";
+
+            $this->messages->sendText($phone, $message);
+            return;
+        }
+
+        if (str_contains($text, 'human') || str_contains($text, 'help') || str_contains($text, 'support') || str_contains($text, 'speak')) {
+            $message = "🔐 *Your Account Details*\n\n";
+            $message .= "👤 *Name:* {$existingAccount->name}\n";
+            $message .= "📧 *Email:* {$existingAccount->email}\n";
+            $message .= "🆔 *User ID:* {$existingAccount->user_id}\n\n";
+            $message .= "What would you like to do?\n\n";
+            $message .= "Reply with:\n";
+            $message .= "*1* - 🔗 Login to Dashboard\n";
+            $message .= "*2* - 📞 Contact Support Team";
+
+            $this->messages->sendText($phone, $message);
+            return;
+        }
+
+        if ($text === '1') {
+            $loginLink = $this->dashboardLinks->dashboardForRole($existingAccount->user_type, $existingAccount);
+            $message = "✅ *Dashboard Access*\n\n";
+            $message .= "🔗 *Your Dashboard Link:*\n{$loginLink}\n\n";
+            $message .= "📌 *Instructions:*\n";
+            $message .= "1️⃣ Click the link above\n";
+            $message .= "2️⃣ You'll be automatically logged in\n";
+            $message .= "3️⃣ Complete your profile setup\n\n";
+            $message .= "❓ *Need help?*\n";
+            $message .= "Reply with 'SUPPORT' to chat with our team.";
+
+            $this->messages->sendText($phone, $message);
+            return;
+        }
+
+        if ($text === '2') {
+            $message = "📞 *Support Team Available*\n\n";
+            $message .= "Thank you for contacting us!\n\n";
+            $message .= "🆔 *Your User ID:* {$existingAccount->user_id}\n";
+            $message .= "📧 *Email:* {$existingAccount->email}\n";
+            $message .= "👤 *Name:* {$existingAccount->name}\n\n";
+            $message .= "Our support team will help you shortly.\n\n";
+            $message .= "📧 *You can also email us:*\n";
+            $message .= "support@nxtutors.com\n\n";
+            $message .= "⏱️ *Response Time:* Usually within 2-4 hours\n";
+            $message .= "🕐 *Hours:* Monday-Friday, 9AM-6PM";
+
+            $this->messages->sendText($phone, $message);
+            $this->handoff($conversation, 'User selected support option for existing account.', HandoffReasonCode::UserRequested);
+            return;
+        }
+
+        if (str_contains($text, 'no') || str_contains($text, 'not') || str_contains($text, 'different')) {
+            $message = "We understand!\n\n";
+            $message .= "If you need to create a new account with a different phone number or email, please start the onboarding process again.\n\n";
+            $message .= "📞 For questions, contact our support team:\n";
+            $message .= "support@nxtutors.com\n\n";
+            $message .= "We're here to help!";
+
+            $this->messages->sendText($phone, $message);
+            $this->handoff($conversation, 'User denied existing account and requested new signup.', HandoffReasonCode::UserRequested);
+            return;
+        }
+
+        $this->messages->sendText($phone, "Please reply with:\nYES, HUMAN, or NO");
     }
 
     private function questionFor(string $role, ConversationState $state): string
