@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Generation - NxTutors</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .success-badge {
+            display: inline-block;
+            background: #4CAF50;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        input[type="file"],
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="file"]:hover,
+        input[type="text"]:hover,
+        select:hover {
+            border-color: #667eea;
+        }
+
+        input[type="file"]:focus,
+        input[type="text"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .file-input-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9ff;
+        }
+
+        .file-input-label:hover {
+            background: #f0f2ff;
+            border-color: #764ba2;
+        }
+
+        .file-input-label input[type="file"] {
+            display: none;
+        }
+
+        .file-name {
+            color: #667eea;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .counter-display {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .counter-display.active {
+            display: block;
+        }
+
+        .counter-circle {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            color: white;
+            font-size: 48px;
+            font-weight: bold;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+
+        .spinner {
+            position: absolute;
+            top: -5px;
+            left: -5px;
+            width: 160px;
+            height: 160px;
+            border: 5px solid rgba(255, 255, 255, 0.2);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .counter-text {
+            font-size: 16px;
+            color: #666;
+            margin-top: 20px;
+        }
+
+        .status-message {
+            display: none;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 14px;
+            animation: slideIn 0.3s ease;
+        }
+
+        .status-message.show {
+            display: block;
+        }
+
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .form-content {
+            display: block;
+        }
+
+        .form-content.hidden {
+            display: none;
+        }
+
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .detail-item {
+            background: #f8f9ff;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .detail-label {
+            font-size: 12px;
+            color: #999;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .detail-value {
+            font-size: 14px;
+            color: #333;
+            margin-top: 5px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="success-badge">✅ Payment Received</div>
+            <h1>Generate Profile</h1>
+            <p>Upload your CV and fill in your details to generate your profile</p>
+        </div>
+
+        <div class="form-content" id="formContent">
+            <form id="profileForm">
+                <div class="form-group">
+                    <label for="cv">Your CV / Resume (PDF, JPG or PNG)</label>
+                    <div class="file-input-label" onclick="document.getElementById('cvInput').click()">
+                        <span>📎</span>
+                        <span id="cvFileName">Choose File</span>
+                    </div>
+                    <input type="file" id="cvInput" accept=".pdf,.jpg,.jpeg,.png" style="display: none;">
+                </div>
+
+                <div class="form-group">
+                    <label for="fullName">Full name</label>
+                    <input type="text" id="fullName" name="full_name" value="Santosh sharma" readonly>
+                </div>
+
+                <div class="form-group">
+                    <label for="subject">Main subject you teach</label>
+                    <input type="text" id="subject" name="subject" value="Maths for class 8-10th" readonly>
+                </div>
+
+                <div class="form-group">
+                    <label for="city">Your city</label>
+                    <input type="text" id="city" name="city" value="Gurgaon" readonly>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email (optional — leave blank to use the email on your CV)</label>
+                    <input type="text" id="email" name="email" value="07santoshsharma2004@gmail.com">
+                </div>
+
+                <div class="button-group">
+                    <button type="button" class="btn-primary" id="generateBtn">Generate my profile</button>
+                </div>
+
+                <div class="status-message" id="statusMessage"></div>
+            </form>
+        </div>
+
+        <div class="counter-display" id="counterDisplay">
+            <div>
+                <div class="counter-circle">
+                    <div class="spinner"></div>
+                    <span id="counterValue">60</span>
+                </div>
+                <p class="counter-text">Generating your profile...</p>
+                <p style="font-size: 12px; color: #999; margin-top: 10px;">You will receive the details on WhatsApp in <strong id="countdownText">60 seconds</strong></p>
+            </div>
+
+            <div class="status-message info" id="processingMessage">
+                <strong>Processing...</strong> Your profile is being created and will be sent to your WhatsApp number shortly.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const cvInput = document.getElementById('cvInput');
+        const cvFileName = document.getElementById('cvFileName');
+        const generateBtn = document.getElementById('generateBtn');
+        const statusMessage = document.getElementById('statusMessage');
+        const formContent = document.getElementById('formContent');
+        const counterDisplay = document.getElementById('counterDisplay');
+        const counterValue = document.getElementById('counterValue');
+        const countdownText = document.getElementById('countdownText');
+
+        // Handle file input
+        cvInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                cvFileName.textContent = this.files[0].name;
+                cvFileName.style.color = '#667eea';
+            }
+        });
+
+        // Show message helper
+        function showMessage(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message show ${type}`;
+        }
+
+        // Generate profile
+        generateBtn.addEventListener('click', async function() {
+            const conversationId = new URLSearchParams(window.location.search).get('conversation_id');
+            const role = new URLSearchParams(window.location.search).get('role') || 'tutor';
+
+            if (!conversationId) {
+                showMessage('Conversation ID is required. Please check the URL.', 'error');
+                return;
+            }
+
+            generateBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/nx-whatsapp-onboarding/profile/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                    },
+                    body: JSON.stringify({
+                        conversation_id: parseInt(conversationId),
+                        role: role
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Start counter
+                    formContent.classList.add('hidden');
+                    counterDisplay.classList.add('active');
+                    startCounter(data.counter_duration);
+                } else {
+                    generateBtn.disabled = false;
+                    showMessage(data.error || 'Failed to generate profile. Please try again.', 'error');
+                }
+            } catch (error) {
+                generateBtn.disabled = false;
+                showMessage('An error occurred: ' + error.message, 'error');
+            }
+        });
+
+        // Counter function
+        function startCounter(duration) {
+            let remaining = duration;
+            const counterInterval = setInterval(() => {
+                counterValue.textContent = remaining;
+                countdownText.textContent = remaining + ' second' + (remaining !== 1 ? 's' : '');
+
+                if (remaining <= 0) {
+                    clearInterval(counterInterval);
+                    counterDisplay.classList.remove('active');
+                    showMessage('✅ Profile generated successfully! Check your WhatsApp for details.', 'success');
+                    formContent.classList.remove('hidden');
+                }
+
+                remaining--;
+            }, 1000);
+        }
+
+        // Auto-submit on page load if needed
+        window.addEventListener('load', function() {
+            const autoSubmit = new URLSearchParams(window.location.search).get('auto_submit');
+            if (autoSubmit === 'true') {
+                generateBtn.click();
+            }
+        });
+    </script>
+</body>
+</html>
