@@ -1210,6 +1210,12 @@ function process_message(string $phone, string $text): array
 
         // Duplicate guard: this WhatsApp number already has an NXtutors account.
         if ($startingSignup && account_exists('phone', $phone)) {
+            save_session($phone, [
+                'role' => 'unknown',
+                'state' => 'EXISTING_ACCOUNT',
+                'existing_account_shown' => false,
+                'data' => ['wa_phone' => $phone],
+            ]);
             return ['status' => 'accepted', 'reply' => duplicate_phone_message(), 'role' => 'unknown', 'forward' => false];
         }
 
@@ -1271,6 +1277,64 @@ function process_message(string $phone, string $text): array
         }
 
         return ['status' => 'accepted', 'reply' => session_timeout_message(), 'role' => (string) ($session['role'] ?? 'unknown'), 'forward' => false];
+    }
+
+    // ---------------------------------------------------------------------- //
+    // State: existing account detected — handle user response (PRIORITY).    //
+    // ---------------------------------------------------------------------- //
+    if (($session['state'] ?? '') === 'EXISTING_ACCOUNT') {
+        $t = normalized_text($text);
+
+        if ($command === 'human' || str_contains($t, 'human') || str_contains($t, 'help') || str_contains($t, 'support')) {
+            $reply = "🔐 *Your Account Details*\n\n"
+                . "What would you like to do?\n\n"
+                . "Reply with:\n"
+                . "*1* - 🔗 Login to Dashboard\n"
+                . "*2* - 📞 Contact Support Team";
+            $session['state'] = 'EXISTING_ACCOUNT_OPTIONS';
+            save_session($phone, $session);
+            return ['status' => 'accepted', 'reply' => $reply, 'role' => 'unknown', 'forward' => false];
+        }
+
+        if ($t === 'yes' || str_contains($t, 'confirm') || str_contains($t, 'correct')) {
+            $reply = "✅ Great! Please login here:\n" . login_url();
+            return ['status' => 'accepted', 'reply' => $reply, 'role' => 'unknown', 'forward' => false];
+        }
+
+        if ($t === 'no' || str_contains($t, 'not') || str_contains($t, 'different')) {
+            $reply = "We understand!\n\nIf you need to create a new account, please contact support.\n\n📞 Email: support@nxtutors.com";
+            clear_session($phone);
+            return ['status' => 'accepted', 'reply' => $reply, 'role' => 'unknown', 'forward' => false];
+        }
+
+        return register_invalid($phone, $session, "Please reply YES, HUMAN, or NO");
+    }
+
+    // ---------------------------------------------------------------------- //
+    // State: existing account with options — handle choice.                  //
+    // ---------------------------------------------------------------------- //
+    if (($session['state'] ?? '') === 'EXISTING_ACCOUNT_OPTIONS') {
+        $t = normalized_text($text);
+
+        if ($t === '1' || str_contains($t, 'login') || str_contains($t, 'dashboard')) {
+            $reply = "✅ *Dashboard Access*\n\n"
+                . "🔗 Login here:\n" . login_url() . "\n\n"
+                . "You'll be automatically logged in.\n\n"
+                . "Need help? Reply SUPPORT";
+            return ['status' => 'accepted', 'reply' => $reply, 'role' => 'unknown', 'forward' => false];
+        }
+
+        if ($t === '2' || str_contains($t, 'support')) {
+            $reply = "📞 *Support Team Available*\n\n"
+                . "Our support team will help you shortly.\n\n"
+                . "📧 Email: support@nxtutors.com\n\n"
+                . "⏱️ Response time: Usually within 2-4 hours\n"
+                . "🕐 Hours: Monday-Friday, 9AM-6PM";
+            clear_session($phone);
+            return ['status' => 'forwarded', 'reply' => $reply, 'role' => 'unknown', 'forward' => true];
+        }
+
+        return register_invalid($phone, $session, "Please reply 1 (Login) or 2 (Support)");
     }
 
     // ---------------------------------------------------------------------- //
