@@ -5,12 +5,20 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use NxTutors\WhatsAppOnboarding\Health\HealthCheckService;
 use NxTutors\WhatsAppOnboarding\Profile\Controllers\ProfileGenerationController;
+use NxTutors\WhatsAppOnboarding\Profile\Controllers\ExistingAccountController;
 
 Route::prefix('api/nx-whatsapp-onboarding')
     ->name('nxtutors.whatsapp-onboarding.api.')
     ->group(static function (): void {
         Route::get('/health', static fn (HealthCheckService $health): array => $health->live())->name('health');
+
+        // Profile Generation
         Route::post('/profile/generate', ProfileGenerationController::class . '@generateProfile')->name('profile.generate');
+
+        // Existing Account Handling
+        Route::post('/account/check-existing', ExistingAccountController::class . '@checkExisting')->name('account.check-existing');
+        Route::post('/account/handle-human', ExistingAccountController::class . '@handleHumanRequest')->name('account.handle-human');
+        Route::post('/account/dashboard-choice', ExistingAccountController::class . '@handleDashboardChoice')->name('account.dashboard-choice');
     });
 
 Route::get('/health', static fn (HealthCheckService $health): array => $health->live())->name('nxtutors.whatsapp-onboarding.health.root');
