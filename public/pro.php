@@ -393,41 +393,60 @@ function pro_store_cv(array $file): array
 /* OpenAI profile generation                                                  */
 /* -------------------------------------------------------------------------- */
 
-function pro_openai_prompt(string $name, string $subject, string $email): string
+function pro_openai_prompt(string $name, string $subject, string $city): string
 {
-    return "You are an expert SEO copywriter for an Indian tutoring marketplace (NXtutors). "
-        . "Using the attached CV/resume and the details below, produce ONE JSON object only — no prose, no markdown.\n\n"
-        . "Tutor name: {$name}\nPrimary subject: {$subject}\nEmail: {$email}\n\n"
+    return "You are an expert SEO copywriter and resume data-extractor for an Indian tutoring marketplace (NXtutors). "
+        . "Read the attached CV/resume carefully and, with the details below, produce ONE JSON object only — no prose, no markdown, no code fences.\n\n"
+        . "Tutor name: {$name}\nPrimary subject: {$subject}\nCity: {$city}\n\n"
+        . "Extract EVERY field you can find in the CV (especially the email and phone); use \"\" only when a value is genuinely absent. "
+        . "Read the candidate's address for district/state/pincode.\n\n"
+        . "Write rich, original, human-sounding marketing copy (NOT terse bullet points). LENGTH IS IMPORTANT:\n"
+        . "- profile_desc: an engaging 100-150 word summary paragraph (the short 'About' blurb).\n"
+        . "- pro_desc: a COMPLETE long-form tutor profile of AT LEAST 2000 words total. Use these EXACT section "
+        . "headings, each on its own line, with full multi-paragraph prose under each:\n"
+        . "    About {$name} — background, qualifications, what they teach (about 350-450 words)\n"
+        . "    Teaching Expertise & Methodology — AT LEAST 800 words, very detailed\n"
+        . "    Subjects & Syllabus Covered — boards, classes, chapters (about 350 words)\n"
+        . "    Results & Student Outcomes (about 300 words)\n"
+        . "    Who This Is For & How To Start — call to action (about 200 words)\n"
+        . "Write naturally in first person. Do NOT summarise or stop early — produce the full 2000+ words.\n\n"
         . "Return exactly this JSON shape:\n"
-        . '{"education":"<concise highest qualification>","experience":"<years, e.g. 5 years>",'
-        . '"profile_title":"<short SEO title under 90 chars>","profile_desc":"<1-2 sentence summary>",'
-        . '"pro_desc":"<a detailed, human, SEO-rich professional tutor profile of AT LEAST 2000 words, '
-        . 'written in first person, covering teaching philosophy, subjects, experience, achievements, '
-        . 'methodology, results, and a call to action>","email":"<email found in CV or empty>",'
-        . '"phone":"<phone found in CV or empty>"}'."\n\n"
-        . 'Only output the JSON object.';
+        . '{"education":"<highest qualification>","experience":"<years, e.g. 5 years>",'
+        . '"district":"<district or area>","state":"<state>","pincode":"<6-digit pincode>",'
+        . '"address":"<full postal address>","dob":"<date of birth YYYY-MM-DD>","gender":"<male, female or other>",'
+        . '"profile_title":"<SEO title under 90 chars>","profile_desc":"<100-150 word summary>",'
+        . '"pro_desc":"<2000+ word sectioned profile>","email":"<email from CV or empty>","phone":"<phone from CV or empty>"}'."\n\n"
+        . 'Output ONLY the JSON object.';
 }
 
 /**
  * @return array<string, string>|null structured fields, or null on failure
  */
-function pro_generate_profile(string $cvPath, string $cvMime, string $name, string $subject, string $email): ?array
+function pro_generate_profile(string $cvPath, string $cvMime, string $name, string $subject, string $city): ?array
 {
     if (pro_fake_ai()) {
-        $body = trim(str_repeat(
-            "I am {$name}, a passionate {$subject} educator dedicated to helping every student "
-            . "build deep understanding and exam confidence. Over years of teaching I have refined a "
-            . "methodology that blends fundamentals, practice, and personalised feedback. ",
-            40
-        ));
+        $para = "I am {$name}, a passionate {$subject} educator in {$city} dedicated to helping every student "
+            . "build deep understanding and exam confidence. Over years of teaching I have refined a methodology "
+            . "that blends fundamentals, plenty of guided practice, and personalised feedback. ";
+        $body = "About {$name}\n\n" . trim(str_repeat($para, 12))
+            . "\n\nTeaching Expertise & Methodology\n\n" . trim(str_repeat($para, 22))
+            . "\n\nSubjects & Syllabus Covered\n\n" . trim(str_repeat($para, 8))
+            . "\n\nResults & Student Outcomes\n\n" . trim(str_repeat($para, 6))
+            . "\n\nWho This Is For & How To Start\n\n" . trim(str_repeat($para, 5));
 
         return [
-            'education' => 'M.Sc / B.Ed (from CV)',
+            'education' => 'M.Sc Mathematics, B.Ed',
             'experience' => '5 years',
-            'profile_title' => 'Expert ' . $subject . ' Tutor — Concept-First, Results-Driven',
-            'profile_desc' => 'Experienced ' . $subject . ' tutor focused on concept clarity and measurable results.',
+            'district' => $city,
+            'state' => 'Delhi',
+            'pincode' => '110001',
+            'address' => $city . ', India',
+            'dob' => '',
+            'gender' => '',
+            'profile_title' => 'Expert ' . $subject . ' Tutor in ' . $city . ' — Concept-First, Results-Driven',
+            'profile_desc' => 'I am a passionate ' . $subject . ' tutor in ' . $city . ' with years of experience helping students build strong fundamentals, gain exam confidence, and genuinely enjoy learning. My classes blend clear concept-building, plenty of guided practice, and personalised feedback so every student makes steady, measurable progress towards their goals.',
             'pro_desc' => $body,
-            'email' => $email,
+            'email' => 'cv.tutor@example.com',
             'phone' => '',
         ];
     }
@@ -439,7 +458,7 @@ function pro_generate_profile(string $cvPath, string $cvMime, string $name, stri
     $model = env_value('OPENAI_MODEL') ?: 'gpt-4o';
 
     // Build the user content. PDFs go through the Files API; images are inlined.
-    $userContent = [['type' => 'input_text', 'text' => pro_openai_prompt($name, $subject, $email)]];
+    $userContent = [['type' => 'input_text', 'text' => pro_openai_prompt($name, $subject, $city)]];
 
     if ($cvMime === 'application/pdf') {
         $fileId = pro_openai_upload_file($cvPath, $apiKey);
@@ -462,7 +481,7 @@ function pro_generate_profile(string $cvPath, string $cvMime, string $name, stri
             ['role' => 'user', 'content' => $userContent],
         ],
         'text' => ['format' => ['type' => 'json_object']],
-        'max_output_tokens' => 6000,
+        'max_output_tokens' => 9000,
     ];
 
     for ($attempt = 0; $attempt < 2; $attempt++) {
@@ -670,22 +689,51 @@ function pro_page_form(string $token, array $record): never
         . '<input type="file" name="cv" accept=".pdf,.jpg,.jpeg,.png" required>'
         . '<label>Full name</label><input type="text" name="name" required maxlength="255">'
         . '<label>Main subject you teach</label><input type="text" name="subject" required maxlength="255">'
-        . '<label>Email (for your login)</label><input type="email" name="email" required maxlength="255">'
+        . '<label>Your city</label><input type="text" name="city" required maxlength="120" placeholder="e.g. Gurugram">'
         . '<button type="submit">Generate my profile</button>'
-        . '<p class="muted">This can take up to a minute while our AI writes your profile.</p></form>';
+        . '<p class="muted">We read your login email from your CV. This can take up to a minute while our AI writes your profile.</p></form>';
 
     pro_html('NXtutors Pro — Upload', $inner);
 }
 
-function pro_page_success(string $role, string $email, string $tempPassword): never
+/** Laravel Str::slug equivalent (lowercase, non-alphanumeric -> hyphen). */
+function pro_slug(string $value): string
+{
+    $value = strtolower(trim($value));
+    $value = (string) preg_replace('/[^a-z0-9]+/', '-', $value);
+
+    return trim($value, '-');
+}
+
+/**
+ * Build the public tutor profile URL the way the website does:
+ *   /tutor/{slug(city)}/{base64url(user_id . '-nxt')}/{slug(name)}
+ */
+function tutor_profile_url(string $userId, string $city, string $name): string
+{
+    $base = rtrim(env_value('NXTUTORS_SITE_URL') ?: 'https://www.nxtutors.com', '/');
+    $encodedId = rtrim(strtr(base64_encode($userId . '-nxt'), '+/', '-_'), '=');
+    $citySlug = pro_slug($city) !== '' ? pro_slug($city) : 'india';
+    $nameSlug = pro_slug($name) !== '' ? pro_slug($name) : 'tutor';
+
+    return $base . '/tutor/' . $citySlug . '/' . $encodedId . '/' . $nameSlug;
+}
+
+function pro_page_success(string $role, string $email, string $tempPassword, string $profileUrl = ''): never
 {
     $inner = '<h1>Your Pro profile is ready ✅</h1>'
         . '<h2>Your tutor account is created and pending document review.</h2>'
         . '<div class="cred"><strong>Login page:</strong><br>' . pro_e(login_url()) . '</div>'
         . '<div class="cred"><strong>Login email:</strong><br>' . pro_e($email) . '</div>'
         . '<div class="cred"><strong>Temporary password:</strong><br>' . pro_e($tempPassword) . '</div>'
-        . '<div class="cred"><strong>Dashboard:</strong><br>' . pro_e(dashboard_url($role)) . '</div>'
-        . '<p class="muted">Please change your password after your first login.</p>'
+        . '<div class="cred"><strong>Dashboard:</strong><br>' . pro_e(dashboard_url($role)) . '</div>';
+
+    if ($profileUrl !== '') {
+        $inner .= '<div class="cred"><strong>Your public profile:</strong><br>'
+            . '<a href="' . pro_e($profileUrl) . '" style="color:#53bdeb">' . pro_e($profileUrl) . '</a></div>';
+    }
+
+    $inner .= '<p class="muted">Please change your password after your first login. We have also sent these details to your WhatsApp.</p>'
         . '<a class="btn" href="' . pro_e(login_url()) . '">Go to login</a>'
         . '<pre class="muted">' . pro_e(role_checklist($role)) . '</pre>';
 
@@ -701,7 +749,7 @@ function pro_handle_submit(string $token, array $record): never
     $phone = (string) ($record['wa_phone'] ?? '');
     $name = trim((string) ($_POST['name'] ?? ''));
     $subject = trim((string) ($_POST['subject'] ?? ''));
-    $email = trim((string) ($_POST['email'] ?? ''));
+    $city = trim((string) ($_POST['city'] ?? ''));
 
     if (strlen($name) < 2 || strlen($name) > 255) {
         pro_page_error('Please enter your full name.');
@@ -709,8 +757,8 @@ function pro_handle_submit(string $token, array $record): never
     if (strlen($subject) < 2 || strlen($subject) > 255) {
         pro_page_error('Please enter the subject you teach.');
     }
-    if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        pro_page_error('Please enter a valid email address.');
+    if (strlen($city) < 2 || strlen($city) > 120) {
+        pro_page_error('Please enter your city.');
     }
 
     $stored = pro_store_cv($_FILES['cv'] ?? []);
@@ -719,17 +767,25 @@ function pro_handle_submit(string $token, array $record): never
     }
 
     $record['status'] = 'submitted';
-    $record['email'] = $email;
     $record['cv_path'] = (string) $stored['path'];
     save_pro($token, $record);
 
-    $ai = pro_generate_profile((string) $stored['path'], (string) $stored['mime'], $name, $subject, $email);
+    $ai = pro_generate_profile((string) $stored['path'], (string) $stored['mime'], $name, $subject, $city);
     if ($ai === null) {
         // AI failed — still record the paid lead so it is never lost.
-        capture_lead('tutor', $phone, ['name' => $name, 'email' => $email, 'for_class' => $subject, 'pro_mode' => 'ai_failed', 'cv_path' => (string) $stored['path']]);
+        capture_lead('tutor', $phone, ['name' => $name, 'for_class' => $subject, 'city' => $city, 'pro_mode' => 'ai_failed', 'cv_path' => (string) $stored['path']]);
         pro_page_error('We received your payment and CV but could not generate the profile right now. Our team will finish it and contact you on WhatsApp.', 200);
     }
 
+    // Login email comes from the CV; if none was found, derive a stable unique one.
+    $email = trim((string) ($ai['email'] ?? ''));
+    if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $email = 'tutor' . substr((string) preg_replace('/\D+/', '', $phone), -10) . '@nxtutors.in';
+    }
+    $record['email'] = $email;
+    save_pro($token, $record);
+
+    $aiDob = trim((string) ($ai['dob'] ?? ''));
     $data = [
         'name' => $name,
         'email' => $email,
@@ -739,6 +795,14 @@ function pro_handle_submit(string $token, array $record): never
         'class_type' => 'online',
         'education' => trim((string) ($ai['education'] ?? '')),
         'experience' => trim((string) ($ai['experience'] ?? '')),
+        // City comes from the form (required, drives the profile URL); the rest from the CV.
+        'city' => $city,
+        'district' => trim((string) ($ai['district'] ?? '')) ?: $city,
+        'state' => trim((string) ($ai['state'] ?? '')),
+        'pincode' => trim((string) ($ai['pincode'] ?? '')),
+        'address' => trim((string) ($ai['address'] ?? '')),
+        'dob' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $aiDob) === 1 ? $aiDob : '',
+        'gender' => in_array(strtolower(trim((string) ($ai['gender'] ?? ''))), ['male', 'female', 'other'], true) ? strtolower(trim((string) $ai['gender'])) : '',
         'profile' => trim((string) ($ai['profile_title'] ?? ('Expert ' . $subject . ' Tutor'))),
         'profile_desc' => trim((string) ($ai['profile_desc'] ?? '')),
         'pro_desc' => trim((string) ($ai['pro_desc'] ?? '')),
@@ -763,8 +827,9 @@ function pro_handle_submit(string $token, array $record): never
         $record['user_id'] = (string) ($result['user_id'] ?? '');
         save_pro($token, $record);
         pro_complete_chat_session($phone);
-        pro_maybe_send_whatsapp($phone, (string) $result['email'], (string) $result['temp_password']);
-        pro_page_success('tutor', mask_email((string) $result['email']), (string) $result['temp_password']);
+        $profileUrl = tutor_profile_url((string) $result['user_id'], $city, $name);
+        pro_maybe_send_whatsapp($phone, (string) $result['email'], (string) $result['temp_password'], $profileUrl);
+        pro_page_success('tutor', mask_email((string) $result['email']), (string) $result['temp_password'], $profileUrl);
     }
 
     if (($result['status'] ?? '') === 'duplicate') {
@@ -794,7 +859,7 @@ function pro_complete_chat_session(string $phone): void
 }
 
 /** Best-effort WhatsApp confirmation via Graph API (within the 24h window). */
-function pro_maybe_send_whatsapp(string $phone, string $email, string $tempPassword): void
+function pro_maybe_send_whatsapp(string $phone, string $email, string $tempPassword, string $profileUrl = ''): void
 {
     if (strtolower(env_value('PRO_WHATSAPP_CONFIRM') ?: 'true') === 'false') {
         return;
@@ -805,9 +870,15 @@ function pro_maybe_send_whatsapp(string $phone, string $email, string $tempPassw
         return;
     }
 
-    $body = "✅ Your NXtutors Pro tutor account is ready.\nLogin: " . login_url()
-        . "\nEmail: " . mask_email($email) . "\nTemporary password: " . $tempPassword
-        . "\n\nPlease change your password after first login.";
+    $body = "✅ *Your NXtutors Pro tutor profile is ready!*\n\n"
+        . "🔐 *Login details*\n"
+        . "Login page: " . login_url() . "\n"
+        . "Email: " . mask_email($email) . "\n"
+        . "Temporary password: " . $tempPassword . "\n\n";
+    if ($profileUrl !== '') {
+        $body .= "🌐 *Your public profile*\n" . $profileUrl . "\n\n";
+    }
+    $body .= "_Please change your password after your first login._";
 
     $version = env_value('META_WHATSAPP_API_VERSION') ?: 'v20.0';
     $base = rtrim(env_value('META_GRAPH_BASE_URL') ?: 'https://graph.facebook.com', '/');

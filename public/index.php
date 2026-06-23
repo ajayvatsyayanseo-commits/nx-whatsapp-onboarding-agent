@@ -845,6 +845,21 @@ function create_register_profile(string $role, string $phone, array $data): arra
 
     $email = trim((string) ($data['email'] ?? ''));
 
+    // The NXtutors website builds the tutor profile URL from city/district and
+    // returns a 500 (missing route parameter) when either is empty. Guarantee
+    // non-empty values for every tutor created here — covers a manually skipped
+    // city and a Pro-mode CV with no address.
+    if ($role === 'tutor') {
+        $city = trim((string) ($data['city'] ?? ''));
+        if ($city === '') {
+            $city = trim((string) ($data['state'] ?? '')) ?: 'India';
+            $data['city'] = $city;
+        }
+        if (trim((string) ($data['district'] ?? '')) === '') {
+            $data['district'] = $city;
+        }
+    }
+
     // Duplicate guards against the existing website accounts.
     if (register_exists($pdo, $driver, $table, $columns, 'phone', $phone)
         || register_exists($pdo, $driver, $table, $columns, 'email', $email)) {
